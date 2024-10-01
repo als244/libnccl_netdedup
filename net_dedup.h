@@ -2,7 +2,26 @@
 #define NET_DEDUP_H
 
 #include "common.h"
-#include "net_v8.h"
+#include "nccl_net_v8.h"
+
+#include "net_device.h"
+
+#include "fingerprint_cache.h"
+#include "fingerprint_table.h"
+#include "fingerprint.h"
+
+
+typedef struct net_dedup_state {
+	int num_net_devices;
+	Net_Socket_Dev net_devices[MAX_NET_DEDUP_DEVS];
+	Fingerprint_Cache * global_fingerprint_cache;
+} Net_Dedup_State;
+
+
+extern Net_Dedup_State net_dedup_state;
+
+// EXPORTED NCCL FUNCTIONS USED AS PLUGIN!
+
 
 ncclResult_t netDedup_init(ncclDebugLogger_t logFunction);
 ncclResult_t netDedup_devices(int * ndev);

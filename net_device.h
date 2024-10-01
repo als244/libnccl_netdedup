@@ -1,32 +1,74 @@
-/*************************************************************************
- * Copyright (c) 2023-2023, NVIDIA CORPORATION. All rights reserved.
- *
- * See LICENSE.txt for license information
- ************************************************************************/
-
-#ifndef NET_DEVICE_H_
-#define NET_DEVICE_H_
-
-#define NCCL_NET_DEVICE_INVALID_VERSION      0x0
-#define NCCL_NET_MTU_SIZE                    4096
+#ifndef NET_DEVICE_H
+#define NET_DEVICE_H
 
 #include "common.h"
 
-// Arbitrary version number - A given NCCL build will only be compatible with a single device networking plugin
-// version. NCCL will check the supplied version number from net->getProperties() and compare to its internal version.
-#define NCCL_NET_DEVICE_UNPACK_VERSION 0x7  
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <linux/ethtool.h>
+#include <linux/sockios.h>
+#include <fcntl.h>
+#include <ifaddrs.h>
 
-typedef enum {NCCL_NET_DEVICE_HOST=0, NCCL_NET_DEVICE_UNPACK=1} ncclNetDeviceType;
 
-typedef struct {
-  ncclNetDeviceType netDeviceType; // Network offload type
-  int netDeviceVersion;            // Version number for network offload
-  void* handle;
-  size_t size;
-  int needsProxyProgress;
-} ncclNetDeviceHandle_v7_t;
+typedef enum net_device_type {
+	SOCKET,
+	IB
+} NetDeviceType;
 
-typedef ncclNetDeviceHandle_v7_t ncclNetDeviceHandle_v8_t;
-typedef ncclNetDeviceHandle_v7_t ncclNetDeviceHandle_t;
+
+typedef struct netdev_interface {
+    int     index;
+    int     flags;      /* IFF_UP etc. */
+    long    speed;      /* Mbps; -1 is unknown */
+    int     duplex;     /* DUPLEX_FULL, DUPLEX_HALF, or unknown */
+    char    name[IF_NAMESIZE + 1];
+} NetDev_Interface;
+
+
+typedef enum socket_state {
+	SOCKET_STATE_NONE,
+	SOCKET_STATE_INTIALIZED,
+	SOCKET_STATE_ACCEPTING,
+	SOCKET_STATE_ACCEPTED,
+	SOCKET_STATE_CONNECTING,
+	SOCKET_STATE_CONNECTED,
+	SOCKET_STATE_READY,
+	SOCKET_STATE_CLOSED,
+	SOCKET_STATE_ERROR
+} SocketState;
+
+typedef struct net_socket_dev {
+	struct sockaddr_in sa;
+	char if_name[IF_NAMESIZE + 1];
+	int if_index;
+	int if_flags;
+	long if_speed;
+	int plugin_dev_num;
+	int fd;
+	int acceptFd;
+	SocketState socket_state;
+} Net_Socket_Dev;
+
+
+typedef struct net_ib_dev {
+
+} Net_Ib_Dev;
+
+
+typedef struct net_device {
+	NetDeviceType device_type;
+	void * device;
+} Net_Device;
+
+
+
+// returns number of devices which are "UP"
+int init_net_devices(Net_Socket_Dev * net_devices);
+
+
 
 #endif

@@ -1,21 +1,73 @@
 #include "net_dedup.h"
 
 
+
+
+
 // initializes network
 ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
-	return ncclInvalidUsage;
+	
+	int num_net_devices = init_net_devices(net_dedup_state.net_devices);
+	net_dedup_state.num_net_devices = num_net_devices;
+	return ncclSuccess;
 }
 
 
 // returns number of devices
 ncclResult_t netDedup_devices(int * ndev) {
-	return ncclInvalidUsage;
+	
+	*ndev = net_dedup_state.num_net_devices;
+	return ncclSuccess;
+
 }
 
 
 // queries devices properties
 ncclResult_t netDedup_getProperties(int dev, ncclNetProperties_v8_t * props) {
-	return ncclInvalidUsage;
+	
+	if (dev >= net_dedup_state.num_net_devices){
+		return ncclInvalidUsage;
+	}
+
+	Net_Socket_Dev q_dev = net_dedup_state.net_devices[dev];
+
+	props -> name = q_dev.if_name;
+
+	// this should only be for ib devices
+	props -> guid = 0;
+	// we could query /sysfs if needed to find this
+	props -> pciPath = NULL;
+
+	// using sockets means only host pointers
+	props -> ptrSupport = NCCL_PTR_HOST;
+	// registering memory will be seen across whole system becuase
+	// we are using the fingerprint cache and shared memory
+	props -> regIsGlobal = 1;
+
+
+	props -> speed = q_dev.if_speed;
+	// netdev interface port number doesn't matter
+	// default port numbers start at 1 for ib so will do same
+	props -> port = 1;
+
+
+	// will use nccl default
+	props -> latency = 0;
+
+
+	props -> maxComms = MAX_COMMS_NET_DEDUP_SOCKET_DEV;
+
+	// ensure that we are not handling more than 1 receive at a time for now...
+	props -> maxRecvs = 1;
+
+
+	props->netDeviceType = NCCL_NET_DEVICE_HOST;
+  	
+	// not sure what this means...? API version? Something else for the proxy stuff..?
+  	props->netDeviceVersion = 0;
+
+
+  	return ncclSuccess;
 }
 
 

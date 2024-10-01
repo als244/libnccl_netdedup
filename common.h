@@ -9,14 +9,15 @@
 // OK FOR NOW, BUT UNNECESSARY TO INCLUDE THESE IN ALL FILES....
 #define  _GNU_SOURCE
 
-// API for POSIX System Calls
-// (not including <sys/sockets.h> because our functions will overwrite the normal recv()/send())
-// (but not including because intercepting read() and write() as well, because applications may use these APIs to read()/write() to sockfds)
-// #include <unistd.h>
+
+#include <unistd.h>
 
 // Core standard libraries
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <sys/ioctl.h>
+#include <net/if.h>
 
 // For handling net syscall interceptions with different args
 // (not using for now...)
@@ -25,9 +26,6 @@
 // Getting pointer to original functions
 #include <dlfcn.h>
 #include <sys/types.h>
-
-// Determining if we are at Out-of-Band marker indicating Fingerprint dump
-#include <sys/ioctl.h>
 
 // for signals
 #include <signal.h>

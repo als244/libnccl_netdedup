@@ -5,6 +5,10 @@
 
 #include "net_dedup.h"
 
+
+Net_Dedup_State net_dedup_state;
+
+
 const ncclNet_v8_t ncclNetPlugin_v8 = {
   .name = "netdedup",
   .init = netDedup_init,
