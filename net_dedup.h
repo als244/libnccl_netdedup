@@ -24,8 +24,21 @@ typedef struct dedup_listen_comm {
 	int listenFd;
 } Dedup_Listen_Comm;
 
+typedef struct dedup_send_comm {
+	struct sockaddr_in dest_addr;
+	int fd;
+} Dedup_Send_Comm;
+
+typedef struct dedup_recv_comm {
+	struct sockaddr_in src_addr;
+	int fd;
+} Dedup_Recv_Comm;
+
+
 typedef struct dedup_connect_handle {
 	struct sockaddr_in addr;
+	int connectingFd;
+	int in_progress;
 } Dedup_Connect_Handle;
 
 

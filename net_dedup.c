@@ -107,10 +107,10 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) 
 
 	// not sure what this means...? API version? Something else for the proxy stuff..?
 	props->netDeviceType = NCCL_NET_DEVICE_HOST;
-  	props->netDeviceVersion = 8;
+	props->netDeviceVersion = 8;
 
 
-  	return ncclSuccess;
+	return ncclSuccess;
 }
 
 ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) {
@@ -151,9 +151,9 @@ ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) 
 
 	// not sure what this means...? API version? Something else for the proxy stuff..?
 	props->netDeviceType = NCCL_NET_DEVICE_HOST;
-  	props->netDeviceVersion = 7;
+	props->netDeviceVersion = 7;
 
-  	return ncclSuccess;
+	return ncclSuccess;
 }
 
 
@@ -168,7 +168,8 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 	struct sockaddr_in * saddr = &(q_dev.sa);
 
 	// 2.) Create listening socket
-	int listenFd = socket(AF_INET, SOCK_STREAM, 0);
+	// 		- needs to be non-blocking so the accepts() won't block
+	int listenFd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 	if (listenFd < 0){
 		perror("socket()");
 		return ncclSystemError;
@@ -179,6 +180,18 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 	ret = setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &enable, sizeof(enable));
 	if (ret){
 		perror("setsockopt()");
+		return ncclSystemError;
+	}
+
+	ret = setsockopt(listenFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
+	if (ret != 0){
+		perror("setsockopt() to set TCP_NODELAY\n");
+		return ncclSystemError;
+	}
+
+	ret = setsockopt(listenFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
+	if (ret != 0){
+		perror("setsockopt() to set SO_ZEROCOPY\n");
 		return ncclSystemError;
 	}
 
@@ -201,6 +214,8 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 	Dedup_Connect_Handle * connect_handle = (Dedup_Connect_Handle *) handle;
 	memset(connect_handle, 0, sizeof(Dedup_Connect_Handle));
 	memcpy(&(connect_handle -> addr), saddr, sizeof(struct sockaddr_in));
+	connect_handle -> in_progress = 0;
+	connect_handle -> connectingFd = 0;
 
 
 	// Remember the file descriptor we are listening on so we can call accept
@@ -225,14 +240,128 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 // within nccl_net_device.h
 ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclNetDeviceHandle_v8_t** sendDevComm) {
 
-	INFO(NCCL_NET | NCCL_INIT, "Calling listen on dev #%d!\n", dev);
 
-	return ncclInvalidUsage;
+	INFO(NCCL_NET | NCCL_INIT, "Calling connect() on dev #%d!\n", dev);
+
+	Dedup_Connect_Handle * connect_handle = (Dedup_Connect_Handle *) handle;
+	
+	int ret;
+	int enable;
+
+	// assume we won't succeed
+	*sendComm = NULL;
+
+	// 1.) Determine if we already tried connecting, and if so check the status on the saved fd
+	if (connect_handle -> in_progress){
+		int progress_ret;
+		socklen_t prog_ret_len = sizeof(int);
+		ret = getsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ERROR, (void*)&progress_ret, &prog_ret_len);
+		if (ret){
+			perror("getsockopt()");
+			return ncclSystemError;
+		}
+
+		// we successfully connected
+		if (progress_ret == 0){
+			Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
+			if (!dedup_send_comm){
+				perror("malloc() for send_comm");
+				return ncclSystemError;
+			}
+
+			dedup_send_comm -> fd = connect_handle -> connectingFd;
+			memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
+
+			ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
+			if (ret != 0){
+				perror("setsockopt() to set TCP_NODELAY\n");
+				return ncclSystemError;
+			}
+
+			ret = setsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
+			if (ret != 0){
+				perror("setsockopt() to set SO_ZEROCOPY\n");
+				return ncclSystemError;
+			}
+
+			// we are connected so set the send comm indicated the socket file descriptor to use
+			*sendComm = dedup_send_comm;
+
+			return ncclSuccess;
+		}
+		else if (progress_ret == EINPROGRESS){
+			return ncclSuccess;
+		}
+		else{
+			fprintf(stderr, "Error: trying to connect failed after being in progress: %d\n", progress_ret);
+			return ncclSystemError;
+		}
+
+	}
+
+	
+	// If we weren't in progress then create socket and call connect()
+
+	// 1.) create connecting socket (must be non-blocking)
+	int connectingFd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+	if (connectingFd < 0){
+		perror("socket() for connect");
+		return ncclSystemError;
+	}
+	connect_handle -> connectingFd = connectingFd;
+
+	// 2.) Use the handle to where we are connecting to
+	//		- this was created in listen and NCCL core sent this data out-of-band
+	struct sockaddr_in saddr = connect_handle -> addr;
+
+	// 2.) call connect
+	ret = connect(connectingFd, &saddr, sizeof(struct sockaddr_in));
+	if (ret == -1){
+
+		if (errno != EINPROGRESS){
+			perror("connect() and errno not in progress");
+			return ncclSystemError;
+		}
+		else{
+			connect_handle -> in_progress = 1;
+			return ncclSuccess;
+		}
+	}
+
+	// if we somehow immediately connected
+
+	Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
+	if (!dedup_send_comm){
+		perror("malloc() for send_comm");
+		return ncclSystemError;
+	}
+
+	dedup_send_comm -> fd = connect_handle -> connectingFd;
+	memcpy(&(dedup_send_comm -> dest_addr), &saddr, sizeof(struct sockaddr_in));
+
+
+
+	ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
+	if (ret != 0){
+		perror("setsockopt() to set TCP_NODELAY\n");
+		return ncclSystemError;
+	}
+
+	ret = setsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
+	if (ret != 0){
+		perror("setsockopt() to set SO_ZEROCOPY\n");
+		return ncclSystemError;
+	}
+
+
+	// we are connected so set the send comm indicated the socket file descriptor to use
+	*sendComm = dedup_send_comm;
+
+
+	return ncclSuccess;
 }
 
 ncclResult_t netDedup_connect_v7(int dev, void * handle, void ** sendComm, ncclNetDeviceHandle_v7_t** sendDevComm) {
-
-	
 
 	return netDedup_connect_v8(dev, handle, sendComm, (ncclNetDeviceHandle_v8_t**) sendDevComm);
 }
@@ -240,9 +369,44 @@ ncclResult_t netDedup_connect_v7(int dev, void * handle, void ** sendComm, ncclN
 
 ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDeviceHandle_v8_t** recvDevComm) {
 
-	printf("Called accept()\n");
+	// assume we will fail
+	*recvComm = NULL;
 
-	return ncclInvalidUsage;
+	Dedup_Listen_Comm * dedup_listen_comm = (Dedup_Listen_Comm *) listenComm;
+	int listenFd = dedup_listen_comm -> listenFd;
+
+	struct sockaddr_in remote_sockaddr;
+	socklen_t remote_len = sizeof(remote_sockaddr);
+
+
+	int acceptedFd = accept4(listenFd, (struct sockaddr *) &remote_sockaddr, &remote_len, SOCK_NONBLOCK);
+
+	if (acceptedFd == -1){
+		// no one is trying to connect
+		if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+			return ncclSuccess;
+		}
+		else{
+			// otherwise we will fail
+			perror("accept4()");
+			return ncclSystemError;
+		}
+		
+	}
+
+	Dedup_Recv_Comm * dedup_recv_comm = malloc(sizeof(Dedup_Recv_Comm));
+	if (!dedup_recv_comm){
+		perror("malloc() for dedup_recv_comm");
+		return ncclSystemError;
+	} 
+
+
+	dedup_recv_comm -> fd = acceptedFd;
+	memcpy(&(dedup_recv_comm -> src_addr), &remote_sockaddr, sizeof(struct sockaddr_in));
+
+	*recvComm = dedup_recv_comm;
+	
+	return ncclSuccess;
 }
 
 ncclResult_t netDedup_accept_v7(void * listenComm, void ** recvComm, ncclNetDeviceHandle_v7_t** recvDevComm) {
