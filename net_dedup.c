@@ -126,6 +126,8 @@ ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) 
 	// we could query /sysfs if needed to find this
 	props -> pciPath = q_dev.pciPath;
 
+	INFO(NCCL_NET | NCCL_INIT, "PCI Path: %s\n", props -> pciPath);
+
 	// using sockets means only host pointers
 	props -> ptrSupport = NCCL_PTR_HOST;
 
