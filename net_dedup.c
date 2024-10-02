@@ -50,7 +50,7 @@ ncclResult_t netDedup_devices(int * ndev) {
 
 
 // Following same pattern as: https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
-ncclResult_t netDedup_getProperties(int dev, ncclNetProperties_v8_t * props) {
+ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) {
 	
 	if (dev >= net_dedup_state.num_net_devices){
 		return ncclInvalidUsage;
@@ -99,22 +99,38 @@ ncclResult_t netDedup_getProperties(int dev, ncclNetProperties_v8_t * props) {
   	return ncclSuccess;
 }
 
+ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) {
+	return netDedup_getProperties_v8(dev, (ncclNetProperties_v8_t *) props);
+}
+
 
 ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 	return ncclInvalidUsage;
 }
 
-ncclResult_t netDedup_connect(int dev, void * handle, void ** sendComm, ncclNetDeviceHandle_v8_t** sendDevComm) {
+ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclNetDeviceHandle_v8_t** sendDevComm) {
 	return ncclInvalidUsage;
 }
 
+ncclResult_t netDedup_connect_v7(int dev, void * handle, void ** sendComm, ncclNetDeviceHandle_v7_t** sendDevComm) {
+	return netDedup_connect_v8(dev, handle, sendComm, (ncclNetDeviceHandle_v8_t**) sendDevComm);
+}
 
-ncclResult_t netDedup_accept(void * listenComm, void ** recvComm, ncclNetDeviceHandle_v8_t** recvDevComm) {
+
+ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDeviceHandle_v8_t** recvDevComm) {
 	return ncclInvalidUsage;
+}
+
+ncclResult_t netDedup_accept_v7(void * listenComm, void ** recvComm, ncclNetDeviceHandle_v7_t** recvDevComm) {
+	return netDedup_accept_v8(listenComm, recvComm, (ncclNetDeviceHandle_v8_t**) recvDevComm);
 }
 
 
 ncclResult_t netDedup_regMr(void * comm, void * data, size_t size, int type, void ** mhandle) {
+	return ncclInvalidUsage;
+}
+
+ncclResult_t netDedup_regMr_v7(void * comm, void * data, int size, int type, void ** mhandle) {
 	return ncclInvalidUsage;
 }
 
