@@ -11,7 +11,7 @@ Net_Dedup_State net_dedup_state;
 
 
 const ncclNet_v8_t ncclNetPlugin_v8 = {
-  .name = "netdedup_v8",
+  .name = "DEDUP",
   .init = netDedup_init,
   .devices = netDedup_devices,
   .getProperties = netDedup_getProperties_v8,
@@ -33,7 +33,7 @@ const ncclNet_v8_t ncclNetPlugin_v8 = {
 };
 
 const ncclCollNet_v8_t ncclCollNetPlugin_v8 = {
-  .name = "netdedup_v8",
+  .name = "DEDUP_COLL",
   .init = netDedup_init,
   .devices = netDedup_devices,
   .getProperties = netDedupColl_getProperties_v8,
@@ -55,7 +55,7 @@ const ncclCollNet_v8_t ncclCollNetPlugin_v8 = {
 
 
 const ncclNet_v7_t ncclNetPlugin_v7 = {
-  .name = "netdedup_v7",
+  .name = "DEDUP",
   .init = netDedup_init,
   .devices = netDedup_devices,
   .getProperties = netDedup_getProperties_v7,
@@ -77,7 +77,7 @@ const ncclNet_v7_t ncclNetPlugin_v7 = {
 };
 
 const ncclCollNet_v7_t ncclCollNetPlugin_v7 = {
-  .name = "netdedup_v7",
+  .name = "DEDUP_COLL",
   .init = netDedup_init,
   .devices = netDedup_devices,
   .getProperties = netDedupColl_getProperties_v7,
