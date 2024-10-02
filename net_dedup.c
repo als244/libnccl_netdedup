@@ -287,6 +287,8 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			// we are connected so set the send comm indicated the socket file descriptor to use
 			*sendComm = dedup_send_comm;
 
+			INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
+
 			return ncclSuccess;
 		}
 		else if (progress_ret == EINPROGRESS){
@@ -357,6 +359,8 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	// we are connected so set the send comm indicated the socket file descriptor to use
 	*sendComm = dedup_send_comm;
 
+	INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
+
 
 	return ncclSuccess;
 }
@@ -369,11 +373,15 @@ ncclResult_t netDedup_connect_v7(int dev, void * handle, void ** sendComm, ncclN
 
 ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDeviceHandle_v8_t** recvDevComm) {
 
+	
+
 	// assume we will fail
 	*recvComm = NULL;
 
 	Dedup_Listen_Comm * dedup_listen_comm = (Dedup_Listen_Comm *) listenComm;
 	int listenFd = dedup_listen_comm -> listenFd;
+
+	
 
 	struct sockaddr_in remote_sockaddr;
 	socklen_t remote_len = sizeof(remote_sockaddr);
@@ -405,6 +413,8 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 	memcpy(&(dedup_recv_comm -> src_addr), &remote_sockaddr, sizeof(struct sockaddr_in));
 
 	*recvComm = dedup_recv_comm;
+
+	INFO(NCCL_NET | NCCL_INIT, "Successful accept() on listenFd #%d!\n", listenFd);
 	
 	return ncclSuccess;
 }
