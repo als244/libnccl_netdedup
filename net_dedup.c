@@ -8,7 +8,7 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 	nccl_log_func = logFunction;
 	
 	pid_t pid = getpid();
-	INFO(NCCL_NET | NCCL_INIT, "[Process %d] Initially loaded net dedup nccl plugin!\n", pid);
+	INFO(NCCL_NET | NCCL_INIT, "Initially loaded net dedup nccl plugin!\n", pid);
 
 	int num_net_devices = init_net_socket_devs(net_dedup_state.net_devices);
 	net_dedup_state.num_net_devices = num_net_devices;
@@ -22,12 +22,12 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 			sleep(1);
 			fd = shm_open(FINGERPRINT_CACHE_PATH, O_RDWR, 0);
 		}
-		printf("[Process %d] Found existing fingerprint cache in system, and mmapping it in to address space!\n", pid);
+		INFO(NCCL_NET | NCCL_INIT, "Found existing fingerprint cache in system, and mmapping it in to address space!\n", pid);
 		net_dedup_state.global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
 	}
 	// we just created it
 	else{
-		printf("[Process %d] Creating and initializing global fingerprint table & cache!\n\tTotal size (table + cache): %lu\n", pid, sizeof(Fingerprint_Cache));
+		INFO(NCCL_NET | NCCL_INIT, "Creating and initializing global fingerprint table & cache!\n\tTotal size (table + cache): %lu\n", pid, sizeof(Fingerprint_Cache));
 		ftruncate(fd, sizeof(Fingerprint_Cache));
 		net_dedup_state.global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
 
@@ -47,7 +47,7 @@ ncclResult_t netDedup_devices(int * ndev) {
 	
 	*ndev = net_dedup_state.num_net_devices;
 
-	INFO(NCCL_NET | NCCL_INIT, "netDedup_devices: found %d devices\n", net_dedup_state.num_net_devices);
+	INFO(NCCL_NET | NCCL_INIT, "Found %d devices\n", net_dedup_state.num_net_devices);
 
 	return ncclSuccess;
 
@@ -60,7 +60,7 @@ ncclResult_t netDedup_devices(int * ndev) {
 // Following same pattern as: https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
 ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) {
 
-	printf("Called getProperties() for device #%d\n", dev);
+	INFO(NCCL_NET | NCCL_INIT, "Called getProperties() for device #%d\n", dev);
 	
 	if (dev >= net_dedup_state.num_net_devices){
 		fprintf(stderr, "Error: calling get_properties on device %d, but only have %d net devices...\n", dev, net_dedup_state.num_net_devices);
@@ -74,7 +74,7 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) 
 	// this should only be for ib devices
 	props -> guid = dev;
 	// we could query /sysfs if needed to find this
-	props -> pciPath = NULL;
+	props -> pciPath = q_dev.pciPath;
 
 	// using sockets means only host pointers
 	props -> ptrSupport = NCCL_PTR_HOST;
@@ -110,7 +110,7 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) 
 
 ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) {
 	
-	printf("Called getProperties() for device #%d\n", dev);
+	INFO(NCCL_NET | NCCL_INIT, "Called getProperties() for device #%d\n", dev);
 	
 	if (dev >= net_dedup_state.num_net_devices){
 		fprintf(stderr, "Error: calling get_properties on device %d, but only have %d net devices...\n", dev, net_dedup_state.num_net_devices);
@@ -124,7 +124,7 @@ ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) 
 	// this should only be for ib devices
 	props -> guid = dev;
 	// we could query /sysfs if needed to find this
-	props -> pciPath = NULL;
+	props -> pciPath = q_dev.pciPath;
 
 	// using sockets means only host pointers
 	props -> ptrSupport = NCCL_PTR_HOST;

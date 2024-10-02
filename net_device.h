@@ -43,6 +43,7 @@ typedef enum socket_state {
 
 typedef struct net_socket_dev {
 	struct sockaddr_in sa;
+	char pciPath[PATH_MAX];
 	char if_name[IF_NAMESIZE + 1];
 	int if_index;
 	int if_flags;

@@ -107,6 +107,7 @@ int init_net_socket_devs(Net_Socket_Dev * net_devices) {
     int num_active_devs = 0;
 
     int i = 0;
+    char tempPath[PATH_MAX];
     while (cur_addr && num_active_devs < MAX_NET_DEDUP_DEVS){
 
         if ((cur_addr -> ifa_addr -> sa_family != AF_INET) || (strlen(cur_addr -> ifa_name) < 3) || (strncmp(cur_addr -> ifa_name, "eno", 3) != 0)){
@@ -133,6 +134,16 @@ int init_net_socket_devs(Net_Socket_Dev * net_devices) {
             net_devices[num_active_devs].plugin_dev_num = num_active_devs;
 
             net_devices[num_active_devs].socket_state = SOCKET_STATE_NONE;
+
+            // get path to symlink
+            snprintf(tempPath, PATH_MAX, "/sys/class/net/%s/device", cur_addr -> ifa_name);
+
+            // get realpath
+            char * res = realpath(tempPath, net_devices[num_active_devs].pciPath);
+            if (!res){
+                fprintf(stderr, "Error: unable to resolve real path...\n");
+                return -1;
+            }
 
             num_active_devs++;
         }
