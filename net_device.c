@@ -136,9 +136,6 @@ int init_net_socket_devs(Net_Socket_Dev * net_devices) {
 
             num_active_devs++;
         }
-        else{
-            fprintf(stderr, "Detected interface %s, but was not up.\n", cur_addr -> ifa_name);
-        }
 
         cur_addr = cur_addr -> ifa_next;
 

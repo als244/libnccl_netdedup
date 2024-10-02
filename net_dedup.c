@@ -104,7 +104,44 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) 
 }
 
 ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) {
-	return netDedup_getProperties_v8(dev, (ncclNetProperties_v8_t *) props);
+	
+	printf("Called getProperties() for device #%d\n", dev);
+	
+	if (dev >= net_dedup_state.num_net_devices){
+		fprintf(stderr, "Error: calling get_properties on device %d, but only have %d net devices...\n", dev, net_dedup_state.num_net_devices);
+		return ncclInvalidUsage;
+	}
+
+	Net_Socket_Dev q_dev = net_dedup_state.net_devices[dev];
+
+	props -> name = q_dev.if_name;
+
+	// this should only be for ib devices
+	props -> guid = dev;
+	// we could query /sysfs if needed to find this
+	props -> pciPath = NULL;
+
+	// using sockets means only host pointers
+	props -> ptrSupport = NCCL_PTR_HOST;
+
+	props -> speed = q_dev.if_speed;
+	// netdev interface port number doesn't matter
+	// default port numbers start at 1
+	props -> port = 0;
+
+
+	// will use nccl default
+	props -> latency = 0;
+
+
+	props -> maxComms = MAX_COMMS_NET_DEDUP_SOCKET_DEV;
+
+	// ensure that we are not handling more than 1 receive at a time for now...
+	props -> maxRecvs = 1;
+
+	// not sure what this means...? API version? Something else for the proxy stuff..?
+	props->netDeviceType = NCCL_NET_DEVICE_HOST;
+  	props->netDeviceVersion = NCCL_NET_DEVICE_UNPACK_VERSION;
 }
 
 
