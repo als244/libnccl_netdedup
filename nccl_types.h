@@ -1,6 +1,24 @@
 #ifndef NCCL_TYPES_H
 #define NCCL_TYPES_H
 
+typedef enum { ncclNumOps_dummy = 5 } ncclRedOp_dummy_t;
+typedef enum { ncclSum        = 0,
+               ncclProd       = 1,
+               ncclMax        = 2,
+               ncclMin        = 3,
+               ncclAvg        = 4,
+               /* ncclNumOps: The number of built-in ncclRedOp_t values. Also
+                * serves as the least possible value for dynamic ncclRedOp_t's
+                * as constructed by ncclRedOpCreate*** functions. */
+               ncclNumOps     = 5,
+               /* ncclMaxRedOp: The largest valid value for ncclRedOp_t.
+                * It is defined to be the largest signed value (since compilers
+                * are permitted to use signed enums) that won't grow
+                * sizeof(ncclRedOp_t) when compared to previous NCCL versions to
+                * maintain ABI compatibility. */
+               ncclMaxRedOp   = 0x7fffffff>>(32-8*sizeof(ncclRedOp_dummy_t))
+             } ncclRedOp_t;
+
 /* Data types */
 typedef enum { ncclInt8       = 0, ncclChar       = 0,
                ncclUint8      = 1,

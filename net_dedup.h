@@ -11,7 +11,6 @@
 #include "fingerprint_table.h"
 #include "fingerprint.h"
 
-
 typedef struct net_dedup_state {
 	int num_net_devices;
 	Net_Socket_Dev net_devices[MAX_NET_DEDUP_DEVS];

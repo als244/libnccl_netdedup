@@ -4,6 +4,7 @@
 #include "common.h"
 
 #include "net_dedup.h"
+#include "net_dedup_coll.h"
 
 
 Net_Dedup_State net_dedup_state;
@@ -31,6 +32,27 @@ const ncclNet_v8_t ncclNetPlugin_v8 = {
   .irecvConsumed = netDedup_irecvConsumed,
 };
 
+const ncclCollNet_v8_t ncclCollNetPlugin_v8 = {
+  .name = "netdedup_v8",
+  .init = netDedup_init,
+  .devices = netDedup_devices,
+  .getProperties = netDedupColl_getProperties_v8,
+  .listen = netDedup_listen,
+  .connect = netDedupColl_connect,
+  .reduceSupport = netDedupColl_reduceSupport,
+  .regMr = netDedupColl_regMr_v8,
+  .regMrDmaBuf = netDedupColl_regMrDmaBuf,
+  .deregMr = netDedupColl_deregMr,
+  .iallreduce = netDedupColl_iallreduce,
+  .iallgather = netDedupColl_iallgather,
+  .ireducescatter = netDedupColl_ireducescatter,
+  .iflush = netDedupColl_iflush,
+  .test = netDedupColl_test,
+  .closeColl = netDedupColl_closeColl,
+  .closeListen = netDedupColl_closeListen,
+};
+
+
 
 const ncclNet_v7_t ncclNetPlugin_v7 = {
   .name = "netdedup_v7",
@@ -52,5 +74,23 @@ const ncclNet_v7_t ncclNetPlugin_v7 = {
   .closeListen = netDedup_closeListen,
   .getDeviceMr = netDedup_getDeviceMr,
   .irecvConsumed = netDedup_irecvConsumed,
+};
+
+const ncclCollNet_v7_t ncclCollNetPlugin_v7 = {
+  .name = "netdedup_v7",
+  .init = netDedup_init,
+  .devices = netDedup_devices,
+  .getProperties = netDedupColl_getProperties_v7,
+  .listen = netDedup_listen,
+  .connect = netDedupColl_connect,
+  .reduceSupport = netDedupColl_reduceSupport,
+  .regMr = netDedupColl_regMr_v7,
+  .regMrDmaBuf = netDedupColl_regMrDmaBuf,
+  .deregMr = netDedupColl_deregMr,
+  .iallreduce = netDedupColl_iallreduce,
+  .iflush = netDedupColl_iflush,
+  .test = netDedupColl_test,
+  .closeColl = netDedupColl_closeColl,
+  .closeListen = netDedupColl_closeListen,
 };
 
