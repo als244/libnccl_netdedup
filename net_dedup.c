@@ -47,6 +47,9 @@ ncclResult_t netDedup_devices(int * ndev) {
 
 
 // queries devices properties
+
+
+// Following same pattern as: https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
 ncclResult_t netDedup_getProperties(int dev, ncclNetProperties_v8_t * props) {
 	
 	if (dev >= net_dedup_state.num_net_devices){
@@ -58,7 +61,7 @@ ncclResult_t netDedup_getProperties(int dev, ncclNetProperties_v8_t * props) {
 	props -> name = q_dev.if_name;
 
 	// this should only be for ib devices
-	props -> guid = 0;
+	props -> guid = dev;
 	// we could query /sysfs if needed to find this
 	props -> pciPath = NULL;
 
@@ -66,13 +69,15 @@ ncclResult_t netDedup_getProperties(int dev, ncclNetProperties_v8_t * props) {
 	props -> ptrSupport = NCCL_PTR_HOST;
 	// registering memory will be seen across whole system becuase
 	// we are using the fingerprint cache and shared memory
-	props -> regIsGlobal = 1;
+
+	// setting the same as in nccl-sockets as 0 for now...
+	props -> regIsGlobal = 0;
 
 
 	props -> speed = q_dev.if_speed;
 	// netdev interface port number doesn't matter
-	// default port numbers start at 1 for ib so will do same
-	props -> port = 1;
+	// default port numbers start at 1
+	props -> port = 0;
 
 
 	// will use nccl default
@@ -88,7 +93,7 @@ ncclResult_t netDedup_getProperties(int dev, ncclNetProperties_v8_t * props) {
 	props->netDeviceType = NCCL_NET_DEVICE_HOST;
   	
 	// not sure what this means...? API version? Something else for the proxy stuff..?
-  	props->netDeviceVersion = 0;
+  	props->netDeviceVersion = NCCL_NET_DEVICE_INVALID_VERSION;
 
 
   	return ncclSuccess;
