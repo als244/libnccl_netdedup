@@ -19,9 +19,14 @@ typedef struct net_dedup_state {
 } Net_Dedup_State;
 
 
-typedef struct dedup_listen {
+typedef struct dedup_listen_comm {
+	int dev_num;
+	int listenFd;
+} Dedup_Listen_Comm;
 
-} Dedup_Listen;
+typedef struct dedup_connect_handle {
+	struct sockaddr_in addr;
+} Dedup_Connect_Handle;
 
 
 extern Net_Dedup_State net_dedup_state;

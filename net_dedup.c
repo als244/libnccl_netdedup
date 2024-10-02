@@ -11,6 +11,11 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 	INFO(NCCL_NET | NCCL_INIT, "Initially loaded net dedup nccl plugin!\n", pid);
 
 	int num_net_devices = init_net_socket_devs(net_dedup_state.net_devices);
+
+	if (num_net_devices == -1){
+		return ncclSystemError;
+	}
+
 	net_dedup_state.num_net_devices = num_net_devices;
 
 	// mmap shard cache into memory...
@@ -154,14 +159,73 @@ ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) 
 
 ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 
-	printf("Called listen() from device %d\n", dev);
+	int ret;
 
-	return ncclInvalidUsage;
+	INFO(NCCL_NET | NCCL_INIT, "Calling listen on dev #%d!\n", dev);
+
+	// 1.) Get address of this device
+	Net_Socket_Dev q_dev = net_dedup_state.net_devices[dev];
+	struct sockaddr_in * saddr = &(q_dev.sa);
+
+	// 2.) Create listening socket
+	int listenFd = socket(AF_INET, SOCK_STREAM, 0);
+	if (listenFd < 0){
+		perror("socket()");
+		return ncclSystemError;
+	}
+
+	// 3.) Set socket options
+	int enable = 1;
+	ret = setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &enable, sizeof(enable));
+	if (ret){
+		perror("setsockopt()");
+		return ncclSystemError;
+	}
+
+	// 4.) Bind to the address returned from getifaddrs()
+	ret = bind(listenFd, saddr, sizeof(struct sockaddr_in));
+	if (ret){
+		perror("bind()");
+		return ncclSystemError;
+	}
+
+	// 5.) Call listen
+	ret = listen(listenFd, SOCKET_LISTEN_BACKLOG);
+	if (ret){
+		perror("listen()");
+		return ncclSystemError;
+	}
+
+
+	// Set address for connect handle, so other side can call connect()
+	Dedup_Connect_Handle * connect_handle = (Dedup_Connect_Handle *) handle;
+	memset(connect_handle, 0, sizeof(Dedup_Connect_Handle));
+	memcpy(&(connect_handle -> addr), saddr, sizeof(struct sockaddr_in));
+
+
+	// Remember the file descriptor we are listening on so we can call accept
+	Dedup_Listen_Comm * dedup_listen_comm = malloc(sizeof(Dedup_Listen_Comm));
+	if (!dedup_listen_comm){
+		perror("malloc() for listen_comm");
+		return ncclSystemError;
+	}
+
+	dedup_listen_comm -> dev_num = dev;
+	dedup_listen_comm -> listenFd = listenFd;
+
+	*listenComm = dedup_listen_comm;
+
+	INFO(NCCL_NET | NCCL_INIT, "Successful listen for dev #%d!\n", dev);
+
+	return ncclSuccess;
 }
 
+
+// ncclNetDeviceHandle_v8_t == ncclNetDeviceHandle_v7_t == ncclNetDeviceHandle_t
+// within nccl_net_device.h
 ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclNetDeviceHandle_v8_t** sendDevComm) {
 
-	printf("Called connect() from device %d\n", dev);
+	INFO(NCCL_NET | NCCL_INIT, "Calling listen on dev #%d!\n", dev);
 
 	return ncclInvalidUsage;
 }
