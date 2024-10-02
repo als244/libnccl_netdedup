@@ -109,7 +109,7 @@ int init_net_socket_devs(Net_Socket_Dev * net_devices) {
     int i = 0;
     while (cur_addr && num_active_devs < MAX_NET_DEDUP_DEVS){
 
-        if ((cur_addr -> ifa_addr -> sa_family != AF_INET) && (cur_addr -> ifa_addr -> sa_family != AF_INET6)){
+        if ((cur_addr -> ifa_addr -> sa_family != AF_INET) || (strlen(cur_addr -> ifa_name) < 3) || (strncmp(cur_addr -> ifa_name, "eno", 3) != 0)){
             cur_addr = cur_addr -> ifa_next;
             continue;
         }
