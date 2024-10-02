@@ -375,19 +375,16 @@ ncclResult_t netDedup_connect_v7(int dev, void * handle, void ** sendComm, ncclN
 
 ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDeviceHandle_v8_t** recvDevComm) {
 
-	
-
 	// assume we will fail
 	*recvComm = NULL;
 
 	Dedup_Listen_Comm * dedup_listen_comm = (Dedup_Listen_Comm *) listenComm;
 	int listenFd = dedup_listen_comm -> listenFd;
 
-	
+	INFO(NCCL_NET | NCCL_INIT, "Calling accept() on listenFd #%d!\n", listenFd);
 
 	struct sockaddr_in remote_sockaddr;
 	socklen_t remote_len = sizeof(remote_sockaddr);
-
 
 	int acceptedFd = accept4(listenFd, (struct sockaddr *) &remote_sockaddr, &remote_len, SOCK_NONBLOCK);
 
