@@ -106,12 +106,10 @@ int init_net_socket_devs(Net_Socket_Dev * net_devices) {
 
     int num_active_devs = 0;
 
+    int i = 0;
     while (cur_addr && num_active_devs < MAX_NET_DEDUP_DEVS){
 
-        if ((cur_addr -> ifa_addr -> sa_family != AF_INET) || (cur_addr -> ifa_addr -> sa_family != AF_INET6)){
-            cur_addr = cur_addr -> ifa_next;
-            continue;
-        }
+        printf("Interface #%d: %s\n", i, cur_addr -> ifa_name);
 
         ret = get_interface_by_name(cur_addr -> ifa_name, &cur_if);
         if (ret){
@@ -140,6 +138,7 @@ int init_net_socket_devs(Net_Socket_Dev * net_devices) {
         }
 
         cur_addr = cur_addr -> ifa_next;
+        i++;
     }
 
     freeifaddrs(ifap);
