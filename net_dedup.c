@@ -54,6 +54,8 @@ ncclResult_t netDedup_devices(int * ndev) {
 
 // Following same pattern as: https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
 ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) {
+
+	printf("Called getProperties() for device #%d\n", dev);
 	
 	if (dev >= net_dedup_state.num_net_devices){
 		return ncclInvalidUsage;
