@@ -216,6 +216,7 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 	memcpy(&(connect_handle -> addr), saddr, sizeof(struct sockaddr_in));
 	connect_handle -> in_progress = 0;
 	connect_handle -> connectingFd = 0;
+	connect_handle -> is_connected = 0;
 
 
 	// Remember the file descriptor we are listening on so we can call accept
@@ -258,7 +259,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		char is_ready;	
 		// non-blocking socket so we don't need special flags
 		// the other side sends a byte after accepting()
-		ssize_t recv_bytes = recv(connect_handle -> is_connected, &is_ready, sizeof(char), 0);
+		ssize_t recv_bytes = recv(connect_handle -> connectingFd, &is_ready, sizeof(char), 0);
 
 		if (recv_bytes == -1){
 			if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
@@ -317,6 +318,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		// that determines if we have been accepted by the other side
 		if (progress_ret == 0){
 			connect_handle -> is_connected = 1;
+			INFO(NCCL_NET | NCCL_INIT, "Connected and waiting for other side for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
 			return ncclSuccess;
 		}
 		else if (progress_ret == EINPROGRESS){
