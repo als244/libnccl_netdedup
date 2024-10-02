@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS_DEBUG = -g -fPIC
+CFLAGS_DEBUG = -g -fPIC -Wall -pedantic
 CFLAGS = -O3 -fPIC -march=native
 
 BUILD_CFLAGS = ${CFLAGS_DEBUG}
