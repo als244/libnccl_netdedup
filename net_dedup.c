@@ -97,7 +97,7 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) 
 
 	// not sure what this means...? API version? Something else for the proxy stuff..?
 	props->netDeviceType = NCCL_NET_DEVICE_HOST;
-  	props->netDeviceVersion = NCCL_NET_DEVICE_UNPACK_VERSION;
+  	props->netDeviceVersion = 8;
 
 
   	return ncclSuccess;
@@ -141,7 +141,9 @@ ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) 
 
 	// not sure what this means...? API version? Something else for the proxy stuff..?
 	props->netDeviceType = NCCL_NET_DEVICE_HOST;
-  	props->netDeviceVersion = NCCL_NET_DEVICE_UNPACK_VERSION;
+  	props->netDeviceVersion = 7;
+
+  	return ncclSuccess;
 }
 
 
