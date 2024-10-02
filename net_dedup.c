@@ -269,6 +269,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 				return ncclSystemError;
 			}
 
+			dedup_send_comm -> dev_num = dev;
 			dedup_send_comm -> fd = connect_handle -> connectingFd;
 			memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
 
@@ -338,6 +339,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		return ncclSystemError;
 	}
 
+	dedup_send_comm -> dev_num = dev;
 	dedup_send_comm -> fd = connect_handle -> connectingFd;
 	memcpy(&(dedup_send_comm -> dest_addr), &saddr, sizeof(struct sockaddr_in));
 
@@ -408,7 +410,7 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 		return ncclSystemError;
 	} 
 
-
+	dedup_recv_comm -> dev_num = dedup_listen_comm -> dev_num;
 	dedup_recv_comm -> fd = acceptedFd;
 	memcpy(&(dedup_recv_comm -> src_addr), &remote_sockaddr, sizeof(struct sockaddr_in));
 
@@ -442,10 +444,23 @@ ncclResult_t netDedup_deregMr(void * comm, void * mhandle) {
 }
 
 ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, void * mhandle, void ** request) {
+
+	Dedup_Send_Comm * dedup_send_comm = (Dedup_Send_Comm *) sendComm;
+	int dev_num = dedup_send_comm -> dev_num;
+
+	INFO(NCCL_NET | NCCL_INIT, "Calling isend() on dev #%d!\n\tSize: %d", dev_num, size);
+
+
 	return ncclInvalidUsage;
 }
 
 ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, int * tags, void ** mhandles, void ** request) {
+
+	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
+	int dev_num = dedup_recv_comm -> dev_num;
+
+	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
+
 	return ncclInvalidUsage;
 }
 

@@ -25,13 +25,15 @@ typedef struct dedup_listen_comm {
 } Dedup_Listen_Comm;
 
 typedef struct dedup_send_comm {
-	struct sockaddr_in dest_addr;
+	int dev_num;
 	int fd;
+	struct sockaddr_in dest_addr;
 } Dedup_Send_Comm;
 
 typedef struct dedup_recv_comm {
-	struct sockaddr_in src_addr;
+	int dev_num;
 	int fd;
+	struct sockaddr_in src_addr;
 } Dedup_Recv_Comm;
 
 
