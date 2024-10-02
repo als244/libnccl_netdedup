@@ -43,7 +43,7 @@ ncclResult_t netDedup_devices(int * ndev) {
 	*ndev = net_dedup_state.num_net_devices;
 
 	printf("netDedup_devices: found %d devices\n", net_dedup_state.num_net_devices);
-	
+
 	return ncclSuccess;
 
 }
@@ -108,19 +108,31 @@ ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) 
 
 
 ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
+
+	printf("Called listen() from device %d\n", dev);
+
 	return ncclInvalidUsage;
 }
 
 ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclNetDeviceHandle_v8_t** sendDevComm) {
+
+	printf("Called connect() from device %d\n", dev);
+
 	return ncclInvalidUsage;
 }
 
 ncclResult_t netDedup_connect_v7(int dev, void * handle, void ** sendComm, ncclNetDeviceHandle_v7_t** sendDevComm) {
+
+	
+
 	return netDedup_connect_v8(dev, handle, sendComm, (ncclNetDeviceHandle_v8_t**) sendDevComm);
 }
 
 
 ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDeviceHandle_v8_t** recvDevComm) {
+
+	printf("Called accept()\n");
+
 	return ncclInvalidUsage;
 }
 
