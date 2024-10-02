@@ -251,7 +251,58 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	// assume we won't succeed
 	*sendComm = NULL;
 
-	// 1.) Determine if we already tried connecting, and if so check the status on the saved fd
+	// 1.) Check if we are already connected if the other side has accepted...
+
+	if (connect_handle -> is_connected){
+
+		char is_ready;	
+		// non-blocking socket so we don't need special flags
+		// the other side sends a byte after accepting()
+		ssize_t recv_bytes = recv(connect_handle -> is_connected, &is_ready, sizeof(char), 0);
+
+		if (recv_bytes == -1){
+			if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+				return ncclSuccess;
+			}
+			else{
+				perror("recv(), something went wrong after being connected");
+				return ncclSystemError;
+			}
+		}
+
+		// assert recv_bytes == 1
+
+		Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
+		if (!dedup_send_comm){
+			perror("malloc() for send_comm");
+			return ncclSystemError;
+		}
+
+		dedup_send_comm -> dev_num = dev;
+		dedup_send_comm -> fd = connect_handle -> connectingFd;
+		memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
+
+		ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
+		if (ret != 0){
+			perror("setsockopt() to set TCP_NODELAY\n");
+			return ncclSystemError;
+		}
+
+		ret = setsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
+		if (ret != 0){
+			perror("setsockopt() to set SO_ZEROCOPY\n");
+			return ncclSystemError;
+		}
+
+		// we are connected so set the send comm indicated the socket file descriptor to use
+		*sendComm = dedup_send_comm;
+
+		INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
+
+		return ncclSuccess;
+	}
+
+	// 2.) Determine if we already tried connecting, and if so check the status on the saved fd
 	if (connect_handle -> in_progress){
 		int progress_ret;
 		socklen_t prog_ret_len = sizeof(int);
@@ -262,34 +313,10 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		}
 
 		// we successfully connected
+		// the next time around we will try to read the byte
+		// that determines if we have been accepted by the other side
 		if (progress_ret == 0){
-			Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
-			if (!dedup_send_comm){
-				perror("malloc() for send_comm");
-				return ncclSystemError;
-			}
-
-			dedup_send_comm -> dev_num = dev;
-			dedup_send_comm -> fd = connect_handle -> connectingFd;
-			memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
-
-			ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
-			if (ret != 0){
-				perror("setsockopt() to set TCP_NODELAY\n");
-				return ncclSystemError;
-			}
-
-			ret = setsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
-			if (ret != 0){
-				perror("setsockopt() to set SO_ZEROCOPY\n");
-				return ncclSystemError;
-			}
-
-			// we are connected so set the send comm indicated the socket file descriptor to use
-			*sendComm = dedup_send_comm;
-
-			INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
-
+			connect_handle -> is_connected = 1;
 			return ncclSuccess;
 		}
 		else if (progress_ret == EINPROGRESS){
@@ -305,7 +332,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	
 	// If we weren't in progress then create socket and call connect()
 
-	// 1.) create connecting socket (must be non-blocking)
+	// 3.) create connecting socket (must be non-blocking)
 	int connectingFd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 	if (connectingFd < 0){
 		perror("socket() for connect");
@@ -313,11 +340,11 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	}
 	connect_handle -> connectingFd = connectingFd;
 
-	// 2.) Use the handle to where we are connecting to
+	// 4.) Use the handle to where we are connecting to
 	//		- this was created in listen and NCCL core sent this data out-of-band
 	struct sockaddr_in saddr = connect_handle -> addr;
 
-	// 2.) call connect
+	// 5.) call connect
 	ret = connect(connectingFd, &saddr, sizeof(struct sockaddr_in));
 	if (ret == -1){
 
@@ -330,39 +357,9 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			return ncclSuccess;
 		}
 	}
-
-	// if we somehow immediately connected
-
-	Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
-	if (!dedup_send_comm){
-		perror("malloc() for send_comm");
-		return ncclSystemError;
-	}
-
-	dedup_send_comm -> dev_num = dev;
-	dedup_send_comm -> fd = connect_handle -> connectingFd;
-	memcpy(&(dedup_send_comm -> dest_addr), &saddr, sizeof(struct sockaddr_in));
-
-
-
-	ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
-	if (ret != 0){
-		perror("setsockopt() to set TCP_NODELAY\n");
-		return ncclSystemError;
-	}
-
-	ret = setsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
-	if (ret != 0){
-		perror("setsockopt() to set SO_ZEROCOPY\n");
-		return ncclSystemError;
-	}
-
-
-	// we are connected so set the send comm indicated the socket file descriptor to use
-	*sendComm = dedup_send_comm;
-
-	INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
-
+	
+	// in case we connected immediately...
+	connect_handle -> is_connected = 1;
 
 	return ncclSuccess;
 }
@@ -391,11 +388,12 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 	if (acceptedFd == -1){
 		// no one is trying to connect
 		if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+			INFO(NCCL_NET | NCCL_INIT, "No accepts() ready for dev #%d, using listen fd #%d!\n", dedup_listen_comm -> dev_num, listenFd);
 			return ncclSuccess;
 		}
 		else{
 			// otherwise we will fail
-			perror("accept4()");
+			perror("accept()");
 			return ncclSystemError;
 		}
 		
@@ -413,7 +411,22 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 
 	*recvComm = dedup_recv_comm;
 
-	INFO(NCCL_NET | NCCL_INIT, "Successful accept() on listenFd #%d!\n", listenFd);
+	
+
+
+	// now need to send a byte on the this socket so the other side knows we have accepted
+	char is_ready = 1;
+	ssize_t sent_bytes = send(acceptedFd, &is_ready, 1, 0);
+
+	// assume that sending 1 byte will not block for now...
+	if (sent_bytes != 1){
+		perror("send()");
+		return ncclSystemError;
+	}
+
+
+	INFO(NCCL_NET | NCCL_INIT, "Successful accept() on listenFd #%d!\n\tAccepted Fd: %d\n", listenFd, acceptedFd);
+
 	
 	return ncclSuccess;
 }

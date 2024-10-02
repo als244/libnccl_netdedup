@@ -41,6 +41,7 @@ typedef struct dedup_connect_handle {
 	struct sockaddr_in addr;
 	int connectingFd;
 	int in_progress;
+	int is_connected;
 } Dedup_Connect_Handle;
 
 
