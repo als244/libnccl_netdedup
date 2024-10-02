@@ -213,10 +213,15 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 	// Set address for connect handle, so other side can call connect()
 	Dedup_Connect_Handle * connect_handle = (Dedup_Connect_Handle *) handle;
 	memset(connect_handle, 0, sizeof(Dedup_Connect_Handle));
+
+	char *ip_addr = inet_ntoa(saddr -> sin_addr);
+	unsigned short port = ntohs(saddr -> sin_port);
+	INFO(NCCL_NET | NCCL_INIT, "Setting connect handle saddr to reference this listen fd:\n\tIP addr: %s\n\tPort: %u\n", ip_addr, port);
+
 	memcpy(&(connect_handle -> addr), saddr, sizeof(struct sockaddr_in));
 	connect_handle -> in_progress = 0;
-	connect_handle -> connectingFd = 0;
 	connect_handle -> is_connected = 0;
+	connect_handle -> connectingFd = -1;
 
 
 	// Remember the file descriptor we are listening on so we can call accept
@@ -346,10 +351,13 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	//		- this was created in listen and NCCL core sent this data out-of-band
 	struct sockaddr_in saddr = connect_handle -> addr;
 
+	char *ip_addr = inet_ntoa(saddr.sin_addr);
+	unsigned short port = ntohs(saddr.sin_port);
+	INFO(NCCL_NET | NCCL_INIT, "Prepreparing to connect to:\n\tIP addr: %s\n\tPort: %u\n", ip_addr, port);
+
 	// 5.) call connect
 	ret = connect(connectingFd, &saddr, sizeof(struct sockaddr_in));
 	if (ret == -1){
-
 		if (errno != EINPROGRESS){
 			perror("connect() and errno not in progress");
 			return ncclSystemError;
