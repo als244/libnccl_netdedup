@@ -122,7 +122,7 @@ int init_net_socket_devs(Net_Socket_Dev * net_devices) {
             return -1;
         }
 
-        if ((cur_if.flags & IFF_UP) && (cur_if.flags & ~IFF_LOOPBACK)){
+        if ((cur_if.flags & IFF_UP) && ~(cur_if.flags & IFF_LOOPBACK)){
 
             memcpy(&(net_devices[num_active_devs].sa), (struct sockaddr_in *) cur_addr -> ifa_addr, sizeof(struct sockaddr_in));
             strncpy(net_devices[num_active_devs].if_name, cur_addr -> ifa_name, IF_NAMESIZE);
