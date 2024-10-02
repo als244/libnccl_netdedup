@@ -67,7 +67,7 @@ typedef struct net_device {
 
 
 // returns number of devices which are "UP"
-int init_net_devices(Net_Socket_Dev * net_devices);
+int init_net_socket_devs(Net_Socket_Dev * net_devices);
 
 
 
