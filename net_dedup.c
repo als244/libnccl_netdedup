@@ -131,6 +131,10 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	return ncclInvalidUsage;
 }
 
+ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, int * tags, void ** mhandles, void ** request) {
+	return ncclInvalidUsage;
+}
+
 ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, void ** mhandles, void ** request) {
 	return ncclInvalidUsage;
 }
