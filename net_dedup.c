@@ -96,8 +96,8 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) 
 	props -> maxRecvs = 1;
 
 	// not sure what this means...? API version? Something else for the proxy stuff..?
-	props->netDeviceType = 0;
-  	props->netDeviceVersion = 0;
+	props->netDeviceType = NCCL_NET_DEVICE_HOST;
+  	props->netDeviceVersion = NCCL_NET_DEVICE_UNPACK_VERSION;
 
 
   	return ncclSuccess;
