@@ -41,6 +41,9 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 ncclResult_t netDedup_devices(int * ndev) {
 	
 	*ndev = net_dedup_state.num_net_devices;
+
+	printf("netDedup_devices: found %d devices\n", net_dedup_state.num_net_devices);
+	
 	return ncclSuccess;
 
 }

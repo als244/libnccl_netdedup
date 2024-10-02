@@ -4,16 +4,18 @@
 ncclResult_t netDedupColl_init(ncclDebugLogger_t logFunction) {
 
 	printf("Initializing Net-Dedup Collective net!\n");
-	
-	return ncclInvalidUsage;
+
+	return ncclSuccess;
 }
 
 ncclResult_t netDedupColl_devices(int * ndev) {
-	return ncclInvalidUsage;
+
+	*ndev = net_dedup_state.num_net_devices;
+	return ncclSuccess;
 }
 
 ncclResult_t netDedupColl_getProperties_v8(int dev, ncclNetProperties_v8_t * props){
-	return ncclInvalidUsage;
+	return netDedup_getProperties_v8(dev, props);
 }
 
 ncclResult_t netDedupColl_listen(int dev, void * handle, void ** listenComm) {
