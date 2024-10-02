@@ -58,6 +58,7 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) 
 	printf("Called getProperties() for device #%d\n", dev);
 	
 	if (dev >= net_dedup_state.num_net_devices){
+		fprintf(stderr, "Error: calling get_properties on device %d, but only have %d net devices...\n", dev, net_dedup_state.num_net_devices);
 		return ncclInvalidUsage;
 	}
 
