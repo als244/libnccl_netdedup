@@ -15,10 +15,18 @@ typedef struct net_dedup_state {
 	int num_net_devices;
 	Net_Socket_Dev net_devices[MAX_NET_DEDUP_DEVS];
 	Fingerprint_Cache * global_fingerprint_cache;
+	ncclDebugLogger_t logFunction;
 } Net_Dedup_State;
 
 
+typedef struct dedup_listen {
+
+} Dedup_Listen;
+
+
 extern Net_Dedup_State net_dedup_state;
+extern ncclDebugLogger_t nccl_log_func;
+
 
 // EXPORTED NCCL FUNCTIONS USED AS PLUGIN!
 

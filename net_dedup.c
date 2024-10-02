@@ -1,11 +1,14 @@
 #include "net_dedup.h"
 
 
+
 // initializes network
 ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
+
+	nccl_log_func = logFunction;
 	
 	pid_t pid = getpid();
-	printf("[Process %d] Initially loaded net dedup nccl plugin!\n", pid);
+	INFO(NCCL_NET | NCCL_INIT, "[Process %d] Initially loaded net dedup nccl plugin!\n", pid);
 
 	int num_net_devices = init_net_socket_devs(net_dedup_state.net_devices);
 	net_dedup_state.num_net_devices = num_net_devices;
@@ -32,6 +35,8 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 		init_fingerprint_cache(net_dedup_state.global_fingerprint_cache);
 	}
 
+	net_dedup_state.logFunction = logFunction;
+
 
 	return ncclSuccess;
 }
@@ -42,7 +47,7 @@ ncclResult_t netDedup_devices(int * ndev) {
 	
 	*ndev = net_dedup_state.num_net_devices;
 
-	printf("netDedup_devices: found %d devices\n", net_dedup_state.num_net_devices);
+	INFO(NCCL_NET | NCCL_INIT, "netDedup_devices: found %d devices\n", net_dedup_state.num_net_devices);
 
 	return ncclSuccess;
 

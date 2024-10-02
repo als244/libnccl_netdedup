@@ -12,6 +12,8 @@
 
 Net_Dedup_State net_dedup_state;
 
+ncclDebugLogger_t nccl_log_func;
+
 
 const ncclNet_v8_t ncclNetPlugin_v8 = {
   .name = PLUGIN_NAME,

@@ -32,4 +32,29 @@ typedef enum { ncclInt8       = 0, ncclChar       = 0,
                ncclBfloat16   = 9,
 } ncclDataType_t;
 
+
+
+typedef enum {NCCL_LOG_NONE=0, NCCL_LOG_VERSION=1, NCCL_LOG_WARN=2, NCCL_LOG_INFO=3, NCCL_LOG_ABORT=4, NCCL_LOG_TRACE=5} ncclDebugLogLevel;
+typedef enum {NCCL_INIT=1, NCCL_COLL=2, NCCL_P2P=4, NCCL_SHM=8, NCCL_NET=16, NCCL_GRAPH=32, NCCL_TUNING=64, NCCL_ENV=128, NCCL_ALLOC=256, NCCL_CALL=512, NCCL_PROXY=1024, NCCL_NVLS=2048, NCCL_BOOTSTRAP=4096, NCCL_REG=8192, NCCL_ALL=~0} ncclDebugLogSubSys;
+
+typedef void (*ncclDebugLogger_t)(ncclDebugLogLevel level, unsigned long flags, const char *file, int line, const char *fmt, ...);
+
+
+// * MACROS FOR REPLACING WITH nccl_log_func which is a global variable set 
+//      upon plugin_init
+
+#define WARN(fmt, ...)                                                  \
+  (*nccl_log_func)(NCCL_LOG_WARN, NCCL_ALL, __PRETTY_FUNCTION__,        \
+  __LINE__, fmt, ##__VA_ARGS__)
+
+#define INFO(flags, fmt, ...)                           \
+  (*nccl_log_func)(NCCL_LOG_INFO, flags,                \
+  __PRETTY_FUNCTION__, __LINE__, fmt,           \
+  ##__VA_ARGS__)
+
+#define TRACE(flags, fmt, ...)                          \
+  (*nccl_log_func)(NCCL_LOG_TRACE, flags,               \
+  __PRETTY_FUNCTION__, __LINE__, fmt,           \
+  ##__VA_ARGS__)
+
 #endif
