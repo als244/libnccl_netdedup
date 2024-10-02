@@ -95,11 +95,9 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) 
 	// ensure that we are not handling more than 1 receive at a time for now...
 	props -> maxRecvs = 1;
 
-
-	props->netDeviceType = NCCL_NET_DEVICE_HOST;
-  	
 	// not sure what this means...? API version? Something else for the proxy stuff..?
-  	props->netDeviceVersion = NCCL_NET_DEVICE_INVALID_VERSION;
+	props->netDeviceType = 0;
+  	props->netDeviceVersion = 0;
 
 
   	return ncclSuccess;
