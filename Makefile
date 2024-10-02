@@ -7,7 +7,7 @@ LIB_BUILD_CFLAGS = -shared ${BUILD_CFLAGS}
 
 NCCL_PLUGIN = libnccl-netdedup.so
 
-NCCL_PLUGIN_OBJS = net_dedup.o fingerprint_cache.o fingerprint_table.o fingerprint.o
+NCCL_PLUGIN_OBJS = net_dedup.o net_device.o fingerprint_cache.o fingerprint_table.o fingerprint.o
 
 EXT_LIB_LINKS = -ldl -pthread -lcrypto -lrt
 
@@ -17,6 +17,9 @@ libnccl-netdedup.so: plugin_netdedup.c ${NCCL_PLUGIN_OBJS}
 	${CC} ${LIB_BUILD_CFLAGS} $^ -o $@ ${EXT_LIB_LINKS}
 
 net_dedup.o: net_dedup.c
+	${CC} ${BUILD_CFLAGS} -c $^
+
+net_device.o: net_device.c
 	${CC} ${BUILD_CFLAGS} -c $^
 
 fingerprint_cache.o: fingerprint_cache.c
