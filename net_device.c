@@ -114,8 +114,6 @@ int init_net_socket_devs(Net_Socket_Dev * net_devices) {
             continue;
         }
 
-
-
         ret = get_interface_by_name(cur_addr -> ifa_name, &cur_if);
         if (ret){
             fprintf(stderr, "Error: unable to get info for interface: %s\n", cur_addr -> ifa_name);
@@ -123,10 +121,6 @@ int init_net_socket_devs(Net_Socket_Dev * net_devices) {
         }
 
         if ((cur_if.flags & IFF_UP) && ((cur_if.flags & IFF_LOOPBACK) == 0)){
-
-            printf("Found Interface #%d: %s\n", num_active_devs, cur_addr -> ifa_name);
-
-            printf("Cur_if Flags: %d\n\tAnd Loopback: %d\n", cur_if.flags, cur_if.flags & IFF_LOOPBACK);
 
             memcpy(&(net_devices[num_active_devs].sa), (struct sockaddr_in *) cur_addr -> ifa_addr, sizeof(struct sockaddr_in));
             strncpy(net_devices[num_active_devs].if_name, cur_addr -> ifa_name, IF_NAMESIZE);
