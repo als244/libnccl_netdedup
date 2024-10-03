@@ -300,18 +300,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		dedup_send_comm -> fd = connect_handle -> connectingFd;
 		memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
 
-		ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
-		if (ret != 0){
-			perror("setsockopt() to set TCP_NODELAY\n");
-			return ncclSystemError;
-		}
-
-		ret = setsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
-		if (ret != 0){
-			perror("setsockopt() to set SO_ZEROCOPY\n");
-			return ncclSystemError;
-		}
-
+		
 		// we are connected so set the send comm indicated the socket file descriptor to use
 		*sendComm = dedup_send_comm;
 
@@ -335,6 +324,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		// that determines if we have been accepted by the other side
 		if (progress_ret == 0){
 			connect_handle -> is_connected = 1;
+
 			INFO(NCCL_NET | NCCL_INIT, "Connected and waiting for other side for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
 			return ncclSuccess;
 		}
@@ -351,15 +341,29 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	
 	// If we weren't in progress then create socket and call connect()
 
-	// 3.) create connecting socket (must be non-blocking)
+	// 1.) create connecting socket (must be non-blocking)
 	int connectingFd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
 	if (connectingFd < 0){
 		perror("socket() for connect");
 		return ncclSystemError;
 	}
+
+	// 2.) Set socket options
+	ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
+	if (ret != 0){
+		perror("setsockopt() to set TCP_NODELAY\n");
+		return ncclSystemError;
+	}
+
+	ret = setsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
+	if (ret != 0){
+		perror("setsockopt() to set SO_ZEROCOPY\n");
+		return ncclSystemError;
+	}
+
 	connect_handle -> connectingFd = connectingFd;
 
-	// 4.) Use the handle to where we are connecting to
+	// 3.) Use the handle to where we are connecting to
 	//		- this was created in listen and NCCL core sent this data out-of-band
 	struct sockaddr_in saddr = connect_handle -> addr;
 
@@ -367,7 +371,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	unsigned short port = ntohs(saddr.sin_port);
 	INFO(NCCL_NET | NCCL_INIT, "Prepreparing to connect to:\n\tIP addr: %s\n\tPort: %u\n", ip_addr, port);
 
-	// 5.) call connect
+	// 4.) call connect
 	ret = connect(connectingFd, &saddr, sizeof(struct sockaddr_in));
 	if (ret == -1){
 		if (errno != EINPROGRESS){
