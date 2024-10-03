@@ -291,6 +291,13 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			
 			// for now just assume the send will go through, but really should have another state here...
 			if (sent_bytes != 1){
+
+				// will try to send again next round
+				if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+					return ncclSuccess;
+				}
+
+				// otherwise something went wrong
 				perror("send()");
 				return ncclSystemError;
 			}
