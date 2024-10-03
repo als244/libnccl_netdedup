@@ -196,13 +196,25 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 	}
 
 	// 4.) Bind to the address returned from getifaddrs()
+	//		- using port 0, will get assigned a port
 	ret = bind(listenFd, saddr, sizeof(struct sockaddr_in));
 	if (ret){
 		perror("bind()");
 		return ncclSystemError;
 	}
 
-	// 5.) Call listen
+	// 5.) Get the details of assigned addr
+	struct sockaddr_in bound_addr;
+	socklen_t len = sizeof(struct sockaddr_in);
+
+	ret = getsockname(listenFd, (struct sockaddr *)&bound_addr, &len); 
+	if (ret){
+		perror("getsockname()");
+		return ncclSystemError;
+	}
+
+
+	// 6.) Call listen
 	ret = listen(listenFd, SOCKET_LISTEN_BACKLOG);
 	if (ret){
 		perror("listen()");
@@ -214,11 +226,11 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 	Dedup_Connect_Handle * connect_handle = (Dedup_Connect_Handle *) handle;
 	memset(connect_handle, 0, sizeof(Dedup_Connect_Handle));
 
-	char *ip_addr = inet_ntoa(saddr -> sin_addr);
-	unsigned short port = ntohs(saddr -> sin_port);
+	char *ip_addr = inet_ntoa(bound_addr.sin_addr);
+	unsigned short port = ntohs(bound_addr.sin_port);
 	INFO(NCCL_NET | NCCL_INIT, "Setting connect handle saddr to reference this listen fd:\n\tIP addr: %s\n\tPort: %u\n", ip_addr, port);
 
-	memcpy(&(connect_handle -> addr), saddr, sizeof(struct sockaddr_in));
+	memcpy(&(connect_handle -> addr), &bound_addr, sizeof(struct sockaddr_in));
 	connect_handle -> in_progress = 0;
 	connect_handle -> is_connected = 0;
 	connect_handle -> connectingFd = -1;
