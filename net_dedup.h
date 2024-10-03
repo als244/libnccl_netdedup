@@ -22,6 +22,8 @@ typedef struct net_dedup_state {
 typedef struct dedup_listen_comm {
 	int dev_num;
 	int listenFd;
+	int acceptedFd;
+	struct sockaddr_in src_addr;
 } Dedup_Listen_Comm;
 
 typedef struct dedup_send_comm {
@@ -41,7 +43,6 @@ typedef struct dedup_connect_handle {
 	struct sockaddr_in addr;
 	int connectingFd;
 	int in_progress;
-	int is_connected;
 } Dedup_Connect_Handle;
 
 

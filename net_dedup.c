@@ -232,7 +232,6 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 
 	memcpy(&(connect_handle -> addr), &bound_addr, sizeof(struct sockaddr_in));
 	connect_handle -> in_progress = 0;
-	connect_handle -> is_connected = 0;
 	connect_handle -> connectingFd = -1;
 
 
@@ -245,6 +244,7 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 
 	dedup_listen_comm -> dev_num = dev;
 	dedup_listen_comm -> listenFd = listenFd;
+	dedup_listen_comm -> acceptedFd = -1;
 
 	*listenComm = dedup_listen_comm;
 
@@ -264,55 +264,11 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	Dedup_Connect_Handle * connect_handle = (Dedup_Connect_Handle *) handle;
 	
 	int ret;
-	
 
 	// assume we won't succeed
 	*sendComm = NULL;
 
-	// 1.) Check if we are already connected if the other side has accepted...
-
-	if (connect_handle -> is_connected){
-
-		INFO(NCCL_NET | NCCL_INIT, "Connected and wating for accept confirm for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
-
-		char is_ready;	
-		// non-blocking socket so we don't need special flags
-		// the other side sends a byte after accepting()
-		ssize_t recv_bytes = recv(connect_handle -> connectingFd, &is_ready, 1, 0);
-
-		if (recv_bytes == -1){
-			if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-				INFO(NCCL_NET | NCCL_INIT, "No confirmation from dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
-				return ncclSuccess;
-			}
-			else{
-				perror("recv(), something went wrong after being connected");
-				return ncclSystemError;
-			}
-		}
-
-		// assert recv_bytes == 1
-
-		Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
-		if (!dedup_send_comm){
-			perror("malloc() for send_comm");
-			return ncclSystemError;
-		}
-
-		dedup_send_comm -> dev_num = dev;
-		dedup_send_comm -> fd = connect_handle -> connectingFd;
-		memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
-
-		
-		// we are connected so set the send comm indicated the socket file descriptor to use
-		*sendComm = dedup_send_comm;
-
-		INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
-
-		return ncclSuccess;
-	}
-
-	// 2.) Determine if we already tried connecting, and if so check the status on the saved fd
+	// 1.) Determine if we already tried connecting, and if so check the status on the saved fd
 	if (connect_handle -> in_progress){
 		int progress_ret;
 		socklen_t prog_ret_len = sizeof(int);
@@ -326,9 +282,33 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		// the next time around we will try to read the byte
 		// that determines if we have been accepted by the other side
 		if (progress_ret == 0){
-			connect_handle -> is_connected = 1;
 
-			INFO(NCCL_NET | NCCL_INIT, "Connected and waiting for other side for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
+			char is_ready = 1;
+
+			ssize_t sent_bytes = send(connect_handle -> connectingFd, &is_ready, 1, 0);
+			
+			// for now just assume the send will go through, but really should have another state here...
+			if (sent_bytes != 1){
+				perror("send()");
+				return ncclSystemError;
+			}
+
+			Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
+			if (!dedup_send_comm){
+				perror("malloc() for send_comm");
+				return ncclSystemError;
+			}
+
+			dedup_send_comm -> dev_num = dev;
+			dedup_send_comm -> fd = connect_handle -> connectingFd;
+			memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
+
+			
+			// we are connected so set the send comm indicated the socket file descriptor to use
+			*sendComm = dedup_send_comm;
+
+			INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
+
 			return ncclSuccess;
 		}
 		else if (progress_ret == EINPROGRESS){
@@ -387,9 +367,6 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			return ncclSuccess;
 		}
 	}
-	
-	// in case we connected immediately...
-	connect_handle -> is_connected = 1;
 
 	return ncclSuccess;
 }
@@ -406,14 +383,57 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 	*recvComm = NULL;
 
 	Dedup_Listen_Comm * dedup_listen_comm = (Dedup_Listen_Comm *) listenComm;
+
 	int listenFd = dedup_listen_comm -> listenFd;
 
 	INFO(NCCL_NET | NCCL_INIT, "Calling accept() on listenFd #%d!\n", listenFd);
 
+	int acceptedFd;
+
+	if (dedup_listen_comm -> acceptedFd != -1){
+
+		acceptedFd = dedup_listen_comm -> acceptedFd;
+
+		// now need to send a byte on the this socket so the other side knows we have accepted
+		char is_ready;
+		ssize_t recv_bytes = recv(acceptedFd, &is_ready, 1, 0);
+
+		// assume that the receviing 1 byte will be ready...
+		if (recv_bytes == -1){
+
+			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+				return ncclSuccess;
+			}
+
+			perror("recv()");
+			return ncclSystemError;
+		}
+
+		// we successfully received results and can now return!
+
+		Dedup_Recv_Comm * dedup_recv_comm = malloc(sizeof(Dedup_Recv_Comm));
+		if (!dedup_recv_comm){
+			perror("malloc() for dedup_recv_comm");
+			return ncclSystemError;
+		} 
+
+		memcpy(&(dedup_recv_comm -> src_addr), &(dedup_listen_comm -> src_addr), sizeof(struct sockaddr_in));
+		dedup_recv_comm -> dev_num = dedup_listen_comm -> dev_num;
+		dedup_recv_comm -> fd = acceptedFd;
+		
+
+		*recvComm = dedup_recv_comm;
+
+
+		INFO(NCCL_NET | NCCL_INIT, "Successful accept() on listenFd #%d!\n\tAccepted Fd: %d\n", listenFd, acceptedFd);
+
+		return ncclSuccess;
+	}
+
 	struct sockaddr_in remote_sockaddr;
 	socklen_t remote_len = sizeof(remote_sockaddr);
 
-	int acceptedFd = accept4(listenFd, (struct sockaddr *) &remote_sockaddr, &remote_len, SOCK_NONBLOCK);
+	acceptedFd = accept4(listenFd, (struct sockaddr *) &remote_sockaddr, &remote_len, SOCK_NONBLOCK);
 
 	if (acceptedFd == -1){
 		// no one is trying to connect
@@ -429,32 +449,11 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 		
 	}
 
-	Dedup_Recv_Comm * dedup_recv_comm = malloc(sizeof(Dedup_Recv_Comm));
-	if (!dedup_recv_comm){
-		perror("malloc() for dedup_recv_comm");
-		return ncclSystemError;
-	} 
-
-	dedup_recv_comm -> dev_num = dedup_listen_comm -> dev_num;
-	dedup_recv_comm -> fd = acceptedFd;
-	memcpy(&(dedup_recv_comm -> src_addr), &remote_sockaddr, sizeof(struct sockaddr_in));
-
-	*recvComm = dedup_recv_comm;
-
-	// now need to send a byte on the this socket so the other side knows we have accepted
-	char is_ready = 1;
-	ssize_t sent_bytes = send(acceptedFd, &is_ready, 1, 0);
-
-	// assume that sending 1 byte will not block for now...
-	if (sent_bytes != 1){
-		perror("send()");
-		return ncclSystemError;
-	}
-
-
-	INFO(NCCL_NET | NCCL_INIT, "Successful accept() on listenFd #%d!\n\tAccepted Fd: %d\n", listenFd, acceptedFd);
-
+	dedup_listen_comm -> acceptedFd = acceptedFd;
+	memcpy(&(dedup_listen_comm -> src_addr), &remote_sockaddr, sizeof(struct sockaddr_in));
 	
+	// next iteration of accept() we will try to recv data from connecting side...
+
 	return ncclSuccess;
 }
 
