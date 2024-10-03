@@ -535,6 +535,7 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	INFO(NCCL_NET | NCCL_INIT, "Calling isend() on dev #%d!\n\tSize: %d", dev_num, size);
 
 	// CALLING EXIT HERE TO CONFIRM THAT THE CONNECTION ESTABLISHMENT WORKED!
+	WARN("EXITING! No isend() implementation, exiting...!");
 	exit(1);
 
 	return ncclInvalidUsage;
@@ -548,6 +549,8 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
 
 	// CALLING EXIT HERE TO CONFIRM THAT THE CONNECTION ESTABLISHMENT WORKED!
+	WARN("No irecv() implementation, exiting...!");
+
 	exit(1);
 
 	return ncclInvalidUsage;
