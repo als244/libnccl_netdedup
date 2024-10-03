@@ -283,6 +283,8 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		// that determines if we have been accepted by the other side
 		if (progress_ret == 0){
 
+			INFO(NCCL_NET | NCCL_INIT, "Detected completed connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
+
 			char is_ready = 1;
 
 			ssize_t sent_bytes = send(connect_handle -> connectingFd, &is_ready, 1, 0);
@@ -391,6 +393,8 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 	int acceptedFd;
 
 	if (dedup_listen_comm -> acceptedFd != -1){
+
+		INFO(NCCL_NET | NCCL_INIT, "Already accepted on listenFd #%d, with accepted fd #%d. Waiting to receive confirm!\n", listenFd, dedup_listen_comm -> acceptedFd);
 
 		acceptedFd = dedup_listen_comm -> acceptedFd;
 
