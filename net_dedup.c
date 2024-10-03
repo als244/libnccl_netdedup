@@ -232,6 +232,7 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 
 	memcpy(&(connect_handle -> addr), &bound_addr, sizeof(struct sockaddr_in));
 	connect_handle -> in_progress = 0;
+	connect_handle -> is_connected = 0;
 	connect_handle -> connectingFd = -1;
 
 
@@ -268,7 +269,49 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	// assume we won't succeed
 	*sendComm = NULL;
 
-	// 1.) Determine if we already tried connecting, and if so check the status on the saved fd
+	// 1.) 
+	if (connect_handle -> is_connected){
+
+		INFO(NCCL_NET | NCCL_INIT, "Detected completed connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
+
+		char is_ready = 1;
+
+		ssize_t sent_bytes = send(connect_handle -> connectingFd, &is_ready, 1, 0);
+			
+		// for now just assume the send will go through, but really should have another state here...
+		if (sent_bytes == -1){
+
+			// will try to send again next round
+			if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+				return ncclSuccess;
+			}
+
+			// otherwise something went wrong
+			perror("send()");
+			return ncclSystemError;
+		}
+
+		Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
+		if (!dedup_send_comm){
+			perror("malloc() for send_comm");
+			return ncclSystemError;
+		}
+
+		dedup_send_comm -> dev_num = dev;
+		dedup_send_comm -> fd = connect_handle -> connectingFd;
+		memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
+
+		
+		// we are connected so set the send comm indicated the socket file descriptor to use
+		*sendComm = dedup_send_comm;
+
+		INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
+
+		return ncclSuccess;
+
+	}
+
+	// 2.) Determine if we already tried connecting, and if so check the status on the saved fd
 	if (connect_handle -> in_progress){
 		int progress_ret;
 		socklen_t prog_ret_len = sizeof(int);
@@ -282,42 +325,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		// the next time around we will try to read the byte
 		// that determines if we have been accepted by the other side
 		if (progress_ret == 0){
-
-			INFO(NCCL_NET | NCCL_INIT, "Detected completed connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
-
-			char is_ready = 1;
-
-			ssize_t sent_bytes = send(connect_handle -> connectingFd, &is_ready, 1, 0);
-			
-			// for now just assume the send will go through, but really should have another state here...
-			if (sent_bytes == -1){
-
-				// will try to send again next round
-				if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-					return ncclSuccess;
-				}
-
-				// otherwise something went wrong
-				perror("send()");
-				return ncclSystemError;
-			}
-
-			Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
-			if (!dedup_send_comm){
-				perror("malloc() for send_comm");
-				return ncclSystemError;
-			}
-
-			dedup_send_comm -> dev_num = dev;
-			dedup_send_comm -> fd = connect_handle -> connectingFd;
-			memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
-
-			
-			// we are connected so set the send comm indicated the socket file descriptor to use
-			*sendComm = dedup_send_comm;
-
-			INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
-
+			connect_handle -> is_connected = 1;
 			return ncclSuccess;
 		}
 		else if (progress_ret == EINPROGRESS){
@@ -371,9 +379,12 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			perror("connect() and errno not in progress");
 			return ncclSystemError;
 		}
+		connect_handle -> in_progress = 1;
+		return ncclSuccess;
 	}
 
-	connect_handle -> in_progress = 1;
+	// otherwise we have connected. next call to connect we will send
+	connect_handle -> is_connected = 1;
 
 	return ncclSuccess;
 }
