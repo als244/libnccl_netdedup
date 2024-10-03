@@ -185,13 +185,13 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 
 	ret = setsockopt(listenFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
 	if (ret != 0){
-		perror("setsockopt() to set TCP_NODELAY\n");
+		perror("setsockopt() to set TCP_NODELAY (listen)\n");
 		return ncclSystemError;
 	}
 
 	ret = setsockopt(listenFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
 	if (ret != 0){
-		perror("setsockopt() to set SO_ZEROCOPY\n");
+		perror("setsockopt() to set SO_ZEROCOPY (listen)\n");
 		return ncclSystemError;
 	}
 
@@ -264,7 +264,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	Dedup_Connect_Handle * connect_handle = (Dedup_Connect_Handle *) handle;
 	
 	int ret;
-	int enable;
+	
 
 	// assume we won't succeed
 	*sendComm = NULL;
@@ -351,15 +351,16 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	connect_handle -> connectingFd = connectingFd;
 
 	// 2.) Set socket options
+	int enable = 1;
 	ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
-	if (ret != 0){
-		perror("setsockopt() to set TCP_NODELAY\n");
+	if (ret){
+		perror("setsockopt() to set TCP_NODELAY (connect)\n");
 		return ncclSystemError;
 	}
 
 	ret = setsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
-	if (ret != 0){
-		perror("setsockopt() to set SO_ZEROCOPY\n");
+	if (ret){
+		perror("setsockopt() to set SO_ZEROCOPY (connect)\n");
 		return ncclSystemError;
 	}
 
