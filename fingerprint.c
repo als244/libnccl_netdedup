@@ -65,6 +65,7 @@ int handle_magic_match(uint8_t * data_bytes, uint64_t start_ind, uint64_t end_in
 
 }
 
+
 // ASSUMING THAT FINGERPRINTS HAS PRE-ALLOCATED MEMORY!
 
 // uint8_t max_fingerprints = (num_bytes + min_chunk_size_bytes) / min_chunk_size_bytes;

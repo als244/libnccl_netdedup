@@ -527,18 +527,311 @@ ncclResult_t netDedup_deregMr(void * comm, void * mhandle) {
 	return ncclSuccess;
 }
 
+uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged_fingerprints){
+
+	Fingerprinting_Settings * settings = &((net_dedup_state.global_fingerprint_cache) -> fingerprinting_settings);
+	uint64_t max_fingerprints = (n / (settings -> min_chunk_size_bytes)) + 1;
+	uint64_t num_fingerprints;
+	uint8_t * raw_fingerprint_buffer = malloc(max_fingerprints * FINGERPRINT_NUM_BYTES);
+	uint64_t * boundaries = malloc(max_fingerprints * sizeof(uint64_t));
+	do_fingerprinting((uint8_t *) data, n, &num_fingerprints, raw_fingerprint_buffer, boundaries,
+		settings -> rabin_p, settings -> rabin_m_bits, settings -> rabin_table, settings -> window_bytes, settings -> lower_bits, settings -> min_chunk_size_bytes, settings -> max_chunk_size_bytes, settings -> magic_val);
+
+	
+
+	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
+
+	uint64_t prev_boundary = 0;
+	for (uint64_t i = 0; i < num_fingerprints; i++){
+		memcpy(packaged_fingerprints[i].fingerprint, &(raw_fingerprint_buffer[i * FINGERPRINT_NUM_BYTES]), FINGERPRINT_NUM_BYTES);
+		packaged_fingerprints[i].content_size = boundaries[i] - prev_boundary;
+		prev_boundary = boundaries[i];
+	}
+
+	free(boundaries);
+	free(raw_fingerprint_buffer);
+
+	*ret_packaged_fingerprints = packaged_fingerprints;
+
+	return num_fingerprints;
+
+}
+
+
+int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * fingerprint_header, Fingerprint_Send_State * send_state){
+
+	// 1.) compute all the fingerprints
+
+	uint64_t num_fingerprints = dedup_fingerprinting(data, size, &(send_state -> packaged_fingerprints));
+
+	// 2.) insert all the fingerprints into local cache to retrieve content refs
+
+	Fingerprint * packaged_fingerprints = send_state -> packaged_fingerprints;
+	Fingerprint_Entry * content_refs = malloc(num_fingerprints * sizeof(Fingerprint_Entry));
+	if (!content_refs){
+		perror("malloc() for content refs when computing fingerprints");
+		return -1;
+	}
+
+	int ret;
+	void * cur_buffer = data;
+	for (uint64_t i = 0; i < num_fingerprints; i++){
+		// takes care of duplicates
+		// we are saving the content refs that might be needed for reply without cache lookup again
+		ret = insert_fingerprint(net_dedup_state.global_fingerprint_cache, &(packaged_fingerprints[i]), cur_buffer, &(content_refs[i]));
+		if (ret){
+			fprintf(stderr, "Error: inserting fingerprint failed\n");
+			return -1;
+		}
+		cur_buffer += packaged_fingerprints[i].content_size;
+	}
+
+	// save the content refs as part of request
+	send_state -> content_refs = content_refs;
+
+	// 3.) initialize the structures needed for this send request
+
+	fingerprint_header -> num_fingerprints = num_fingerprints;
+
+	// 3a.) sending fingprints
+	send_state -> send_fingerprint_offset = 0;
+
+	// 3b.) receiving missing fingerprints
+	send_state -> missing_fingerprint_header.num_missing_fingerprints = 0;
+	send_state -> missing_fingerprint_inds = malloc(num_fingerprints * sizeof(uint64_t));
+	if (!(send_state -> missing_fingerprint_inds)){
+		perror("malloc() for preparing missing fingerprint inds buffer");
+		return -1;
+	}
+	send_state -> recv_missing_fingerprint_inds_offset = 0;
+	
+	// 3c.) repalying with content
+	send_state -> cur_reply_content_fingerprint_ind = 0;
+	send_state -> cur_reply_content_fingerprint_offset = 0;
+
+	return 1;
+}
+
 ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, void * mhandle, void ** request) {
+
+	int ret;
 
 	Dedup_Send_Comm * dedup_send_comm = (Dedup_Send_Comm *) sendComm;
 	int dev_num = dedup_send_comm -> dev_num;
 
 	INFO(NCCL_NET | NCCL_INIT, "Calling isend() on dev #%d!\n\tSize: %d", dev_num, size);
 
-	// CALLING EXIT HERE TO CONFIRM THAT THE CONNECTION ESTABLISHMENT WORKED!
-	WARN("EXITING! No isend() implementation, exiting...!");
-	exit(1);
+	Dedup_Req * req = malloc(sizeof(Dedup_Req));
+	if (!req){
+		perror("malloc() for req for send");
+		return ncclSystemError;
+	}
 
-	return ncclInvalidUsage;
+	req -> type = SEND_REQ;
+
+	Dedup_Send_Req * send_req = malloc(sizeof(Dedup_Send_Req));
+	if (!send_req){
+		perror("malloc() for send_req");
+		return ncclSystemError;
+	}
+
+	send_req -> size = size;
+	send_req -> data = data;
+	send_req -> offset = 0;
+	send_req -> stage = SEND_HEADER;
+
+	req -> req = send_req;
+
+	// ensure to save the request
+	*request = req;
+
+	int sockfd = dedup_send_comm -> fd;
+
+	ssize_t sent_bytes;
+	ssize_t recv_bytes;
+
+	// 1. first send header
+
+	if (size > FINGERPRINT_MSG_SIZE_THRESHOLD){
+		send_req -> is_fingerprint = 1;
+	}
+	else{
+		send_req -> is_fingerprint = 0;
+	}
+	
+
+	// this is only 1 byte so it is all or none
+	sent_bytes = send(sockfd, &(send_req -> is_fingerprint), 1, 0);
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return ncclSuccess;
+		}
+		perror("send() during header send");
+		return ncclSystemError;
+	}
+
+	// if it was -1, then we sent the byte
+	if (send_req -> is_fingerprint){
+		ret = process_compute_fingerprints(data, size, &(send_req -> fingerprint_header), &(send_req -> send_fingerprint_state));
+		if (ret == -1){
+			return ncclSystemError;
+		}
+
+		int num_fingerprints = (send_req -> fingerprint_header).num_fingerprints;
+
+		// advance to next stage
+		send_req -> stage = SEND_FINGERPRINT_HEADER;
+
+		// send the fingerprint header
+		sent_bytes = send(sockfd, &(send_req -> fingerprint_header), sizeof(Fingerprint_Header), 0);
+		if (sent_bytes == -1){
+			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+				return ncclSuccess;
+			}
+			perror("send() during fingerprint header send");
+			return ncclSystemError;
+		}
+
+		if (sent_bytes < sizeof(Fingerprint_Header)){
+			send_req -> send_fingerprint_header_offset = sent_bytes;
+			return ncclSuccess;
+		}
+
+		// we sent the whole header so we can advance to next stage
+		send_req -> stage = SEND_PACKAGED_FINGERPRINTS;
+
+		sent_bytes = send(sockfd, send_req -> send_fingerprint_state.packaged_fingerprints, num_fingerprints * sizeof(Fingerprint), 0);
+		if (sent_bytes == -1){
+			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+				return ncclSuccess;
+			}
+			perror("send() during packaged fingerprint send");
+			return ncclSystemError;
+		}
+
+		if (sent_bytes < (num_fingerprints * sizeof(Fingerprint))){
+			(send_req -> send_fingerprint_state).send_fingerprint_offset = sent_bytes;
+			return ncclSuccess;
+		}
+
+		// nearly impossible that we would get here upon this send, but will have it here anyways...
+
+		// otherwise we sent all of the packaged fingerprints and we can advance stage
+		send_req -> stage = RECV_MISSING_FINGERPRINT_HEADER;
+
+		recv_bytes = recv(sockfd, &(send_req -> send_fingerprint_state.missing_fingerprint_header), sizeof(Missing_Fingerprint_Header), 0);
+
+		if (recv_bytes == -1){
+			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+				return ncclSuccess;
+			}
+			perror("send() during recv missing fingerprints header");
+			return ncclSystemError;
+		}
+
+		if (recv_bytes < sizeof(Missing_Fingerprint_Header)){
+			send_req -> send_fingerprint_state.missing_fingerprint_header_offset = recv_bytes;
+			return ncclSuccess;
+
+		}
+
+		// if we've already received the missing fingerprints header now we need to recv the missing fingerprint inds
+		// advance stage
+
+
+		int num_missing_fingerprints = (send_req -> send_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints;
+
+		// there were no missing fingerprints so we are done!
+		if (num_missing_fingerprints == 0){
+			send_req -> stage = SEND_COMPLETE;
+			// will free up resources upon test()
+			return ncclSuccess;
+		}
+
+		// otherwise we will need to send content so advance the stage
+		send_req -> stage = SEND_MISSING_CONTENT;
+
+		// otherwise call recv to get the missing fingerprint inds
+		recv_bytes = recv(sockfd, send_req -> send_fingerprint_state.missing_fingerprint_inds, num_missing_fingerprints * sizeof(uint64_t), 0);
+		if (recv_bytes == -1){
+			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+				return ncclSuccess;
+			}
+			perror("recv() during recv missing fingerprints");
+			return ncclSystemError;
+		}
+
+		// otherwise we have received some missing fingerprints
+
+		if (recv_bytes < (num_missing_fingerprints * sizeof(uint64_t))){
+			send_req -> send_fingerprint_state.recv_missing_fingerprint_inds_offset = recv_bytes;
+			return ncclSuccess;
+		}
+
+		// if we have recved all of the missing fingerprints we can advance 
+		send_req -> stage = SEND_MISSING_CONTENT;
+
+
+		Fingerprint_Entry * content_refs = send_req -> send_fingerprint_state.content_refs;
+		uint64_t * missing_fingerprint_inds = send_req -> send_fingerprint_state.missing_fingerprint_inds;
+
+		uint64_t reply_ind;
+
+		void * temp_buffer = malloc(SAFE_MAX_CHUNK_SIZE_BYTES);
+
+		for (uint64_t i = 0; i < num_missing_fingerprints; i++){
+			reply_ind = missing_fingerprint_inds[i];
+
+			copy_fingerprint_content(temp_buffer, net_dedup_state.global_fingerprint_cache, &(content_refs[reply_ind]));
+
+			sent_bytes = send(sockfd, temp_buffer, content_refs[reply_ind].content_size, 0);
+
+			if (sent_bytes == -1){
+				if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+					return ncclSuccess;
+				}
+				perror("send() during content reply");
+				return ncclSystemError;
+			}
+
+			if (sent_bytes < content_refs[reply_ind].content_size){
+				(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind = i;
+				(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = sent_bytes;
+				return ncclSuccess;
+			}
+		}
+
+		// if we were able to send all the cotnent replies then we can mark as complete
+		send_req -> stage = SEND_COMPLETE;
+		return ncclSuccess;
+	}
+
+
+	// otherwise was just a regular data send (and would've returned from that if statement)
+	
+	// advance to send reg data stage
+	send_req -> stage = SEND_REG_DATA;
+
+	// try to send as much as possible
+	sent_bytes = send(sockfd, data, size, 0);
+
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return ncclSuccess;
+		}
+		perror("send() during reg data send");
+		return ncclSystemError;
+	}
+
+	// otherwise we sent some data
+	send_req -> offset = sent_bytes;
+
+	// if we sent the whole thing indicate completed
+	if (send_req -> offset == size){
+		send_req -> stage = SEND_COMPLETE;
+	}
+
+	return ncclSuccess;
 }
 
 ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, int * tags, void ** mhandles, void ** request) {
@@ -547,6 +840,17 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	int dev_num = dedup_recv_comm -> dev_num;
 
 	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
+
+	Dedup_Send_Req * recv_req = malloc(sizeof(Dedup_Recv_Req));
+	if (!recv_req){
+		perror("malloc() for send_req");
+		return ncclSystemError;
+	}
+
+	recv_req -> size = sizes[0];
+	recv_req -> data = data[0];
+	recv_req -> offset = 0;
+	recv_req -> stage = RECV_HEADER;
 
 	// CALLING EXIT HERE TO CONFIRM THAT THE CONNECTION ESTABLISHMENT WORKED!
 	WARN("No irecv() implementation, exiting...!");
@@ -562,11 +866,157 @@ ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, 
 	return ncclInternalError;
 }
 
+
+int process_send_header()
+
+void process_send_complete(Dedup_Send_Req * send_req){
+	// if this was a fingerprint send need to free resources and return 1
+	if (send_req -> is_fingerprint){
+		free(send_req -> send_fingerprint_state.packaged_fingerprints);
+		free(send_req -> send_fingerprint_state.content_refs);
+		free(send_req -> send_fingerprint_state.missing_fingerprint_inds);
+		free(send_req);
+	}
+	return;
+}
+
+
+int process_send(Dedup_Send_Req * send_req){
+
+	SendReqStage cur_stage = send_req -> stage;
+
+	if (cur_stage == SEND_COMPLETE){
+
+		
+	}
+
+	int to_continue = 1;
+	while (to_continue){
+
+		switch (send_req -> stage){
+
+			case SEND_HEADER:
+				to_continue = process_send_header(send_req);
+				if (to_continue == 1){
+					if (send_req -> is_fingerprint){
+						send_req -> stage = COMPUTE_FINGERPRINTS;
+					}
+					else{
+						send_req -> stage = SEND_REG_DATA;
+					}
+				}
+				break;
+			case SEND_REG_DATA:
+				to_continue = process_send_reg_data(send_req);
+				if (to_continue == 1){
+					send_req -> stage = SEND_COMPLETE;
+				}
+				break;
+			
+			case COMPUTE_FINGERPRINTS:
+				to_continue = process_compute_fingerprints(send_req -> data, send_req -> size, &(send_req -> fingerprint_header), &(send_req -> send_fingerprint_state));
+				if (to_continue == 1){
+					send_req -> stage = SEND_FINGERPRINT_HEADER;
+				}
+				break;
+
+			case SEND_FINGERPRINT_HEADER:
+				to_continue = process_send_fingerprint_header(send_req);
+				if (to_continue == 1){
+					send_req -> stage = SEND_PACKAGED_FINGERPRINTS;
+				}
+				break;
+
+			case SEND_PACKAGED_FINGERPRINTS:
+				to_continue = process_send_packaged_fingerprints(send_req);
+				if (to_continue == 1){
+					send_req -> stage = RECV_MISSING_FINGERPRINT_HEADER;
+				}
+				break;
+
+			case RECV_MISSING_FINGERPRINT_HEADER:
+				to_continue = process_recv_missing_fingerprint_header(send_req);
+				if (to_continue == 1){
+					if ((send_req -> send_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints == 0){
+						send_req -> stage = SEND_COMPLETE;
+					}
+					else{
+						send_req -> stage = SEND_MISSING_CONTENT;
+					}
+				}
+				break;
+
+			case SEND_MISSING_CONTENT:
+				to_continue = process_send_missing_content(send_req);
+				if (to_continue == 1){
+					send_req -> stage = SEND_COMPLETE;
+				}
+				break;
+
+			case SEND_COMPLETE:
+				process_send_complete(send_req);
+				return 1;
+
+			default:
+				fprintf(stderr, "Error: unknown send request stage: %d...\n", send_req -> stage);
+				return -1;
+		}
+
+		if (to_continue == -1){
+			fprintf(stderr, "Error: unable to process during stage: %d\n", send_req -> stage);
+			return -1;
+		}
+	}
+
+	// if we made it out here then we didn't return from SEND_COMPLETE and also didn't have error, so return 0
+	return 0;
+}
+
+
+int process_recv(Dedup_Recv_Req * recv_req){
+
+
+
+
+
+}
+
+
+
+
+
+
+
 ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 
-	INFO(NCCL_NET | NCCL_INIT, "Called test()\n");
+	Dedup_Req * req = (Dedup_Req *) request;
 
-	return ncclInvalidUsage;
+	ReqType type = req -> type;
+
+	int is_complete;
+
+	if (type == SEND_REQ){
+		is_complete = process_send((Dedup_Send_Req *) req -> req);
+		if (is_complete == -1){
+			return ncclSystemError;
+		}
+	}
+
+	if (type == RECV_REQ){
+		is_complete = process_recv((Dedup_Recv_Req *) req -> req);
+		if (is_complete == -1){
+			return ncclSystemError;
+		}
+	}
+
+
+	if (is_complete){
+		free(req);
+		*done = 1;
+	}
+
+	// otherwise is_complete should be zero
+	return ncclSuccess;
 }
 
 
