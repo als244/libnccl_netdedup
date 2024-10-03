@@ -526,6 +526,8 @@ ncclResult_t netDedup_closeListen(void * listenComm) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called closeListen() for listenFd: %d\n", listenFd);
 
+	free(dedup_listen_comm);
+
 	return ncclSuccess;
 }
 
