@@ -276,7 +276,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		char is_ready;	
 		// non-blocking socket so we don't need special flags
 		// the other side sends a byte after accepting()
-		ssize_t recv_bytes = recv(connect_handle -> connectingFd, &is_ready, sizeof(char), 0);
+		ssize_t recv_bytes = recv(connect_handle -> connectingFd, &is_ready, 1, 0);
 
 		if (recv_bytes == -1){
 			if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
@@ -503,6 +503,9 @@ ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, 
 }
 
 ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
+
+	INFO(NCCL_NET | NCCL_INIT, "Called test()\n");
+
 	return ncclInvalidUsage;
 }
 
@@ -517,7 +520,13 @@ ncclResult_t netDedup_closeRecv(void * recvComm) {
 
 
 ncclResult_t netDedup_closeListen(void * listenComm) {
-	return ncclInvalidUsage;
+
+	Dedup_Listen_Comm * dedup_listen_comm = (Dedup_Listen_Comm *) listenComm;
+	int listenFd = dedup_listen_comm -> listenFd;
+
+	INFO(NCCL_NET | NCCL_INIT, "Called closeListen() for listenFd: %d\n", listenFd);
+
+	return ncclSuccess;
 }
 
 
