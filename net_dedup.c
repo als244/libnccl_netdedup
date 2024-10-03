@@ -245,9 +245,7 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 
 	dedup_listen_comm -> dev_num = dev;
 	dedup_listen_comm -> listenFd = listenFd;
-	dedup_listen_comm -> fd = -1;
-	dedup_listen_comm -> ctrlFd = -1;
-	dedup_listen_comm -> has_confirmed_reg = 0;
+	dedup_listen_comm -> acceptedFd = -1;
 
 	*listenComm = dedup_listen_comm;
 
@@ -271,15 +269,14 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	// assume we won't succeed
 	*sendComm = NULL;
 
-	// 1.) if we've already connected on normal socket and sent message indicating regular sock 
-	// 		and we've confirmed connection on control socket
-	if ((connect_handle -> is_sent_connected) && (connect_handle -> is_ctrl_connected)){
+	// 1.) 
+	if (connect_handle -> is_connected){
 
-		INFO(NCCL_NET | NCCL_INIT, "Trying to confirm send for cntrl socket for dev #%d, using fd #%d!\n", dev, connect_handle -> ctrlFd);
+		INFO(NCCL_NET | NCCL_INIT, "Detected completed connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
 
-		char ctrl_sock = 2;
+		char is_ready = 1;
 
-		ssize_t sent_bytes = send(connect_handle -> ctrlFd, &ctrl_sock, 1, 0);
+		ssize_t sent_bytes = send(connect_handle -> connectingFd, &is_ready, 1, 0);
 			
 		// for now just assume the send will go through, but really should have another state here...
 		if (sent_bytes == -1){
@@ -294,7 +291,6 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			return ncclSystemError;
 		}
 
-
 		Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
 		if (!dedup_send_comm){
 			perror("malloc() for send_comm");
@@ -303,80 +299,20 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 
 		dedup_send_comm -> dev_num = dev;
 		dedup_send_comm -> fd = connect_handle -> connectingFd;
-		dedup_send_comm -> ctrlFd = connect_handle -> ctrlFd;
 		memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
 
 		
 		// we are connected so set the send comm indicated the socket file descriptor to use
 		*sendComm = dedup_send_comm;
 
-		INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d, and cntrl fd #!\n", dev, connect_handle -> connectingFd, connect_handle -> ctrlFd);
+		INFO(NCCL_NET | NCCL_INIT, "Successful connect() for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
 
 		return ncclSuccess;
 
 	}
 
-	// if we've already confirmed connected on regular socket but haven't confirmed connected on control socket
-	if (connect_handle -> is_connected && (connect_handle -> in_progress_ctrl)){
-
-		
-		if (!(connect_handle -> is_sent_connected)){
-
-			INFO(NCCL_NET | NCCL_INIT, "Sending confirm connect for regular socket for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
-
-			char reg_sock = 1;
-
-			ssize_t sent_bytes = send(connect_handle -> connectingFd, &reg_sock, 1, 0);
-				
-			// for now just assume the send will go through, but really should have another state here...
-			if (sent_bytes == -1){
-
-				// will try to send again next round
-				if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-					return ncclSuccess;
-				}
-
-				// otherwise something went wrong
-				perror("send()");
-				return ncclSystemError;
-			}
-
-			connect_handle -> is_sent_connected = 1;
-		}
-
-		INFO(NCCL_NET | NCCL_INIT, "Watiting to confirm connect for control socket for dev #%d, using fd #%d!\n", dev, connect_handle -> ctrlFd);
-
-		// we've already sent the first socket connected so now we need to confirm whether the control socket has connected
-		int ctrl_progress_ret;
-		socklen_t ctrl_prog_ret_len = sizeof(int);
-		ret = getsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ERROR, (void*)&ctrl_progress_ret, &ctrl_prog_ret_len);
-		if (ret){
-			perror("getsockopt()");
-			return ncclSystemError;
-		}
-
-		// we successfully connected
-		// the next time around we will try to read the byte
-		// that determines if we have been accepted by the other side
-		if (ctrl_progress_ret == 0){
-			connect_handle -> is_ctrl_connected = 1;
-			return ncclSuccess;
-		}
-		else if (ctrl_progress_ret == EINPROGRESS){
-			return ncclSuccess;
-		}
-		else{
-			fprintf(stderr, "Error: trying to connect failed after being in progress: %d\n", ctrl_progress_ret);
-			return ncclSystemError;
-		}
-	}
-
-
 	// 2.) Determine if we already tried connecting, and if so check the status on the saved fd
 	if (connect_handle -> in_progress){
-
-		INFO(NCCL_NET | NCCL_INIT, "Watiting to confirm connect for regular socket for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
-
 		int progress_ret;
 		socklen_t prog_ret_len = sizeof(int);
 		ret = getsockopt(connect_handle -> connectingFd, SOL_SOCKET, SO_ERROR, (void*)&progress_ret, &prog_ret_len);
@@ -437,18 +373,6 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		return ncclSystemError;
 	}
 
-	ret = setsockopt(connect_handle -> ctrlFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
-	if (ret){
-		perror("setsockopt() to set TCP_NODELAY (connect)\n");
-		return ncclSystemError;
-	}
-
-	ret = setsockopt(connect_handle -> ctrlFd, SOL_SOCKET, SO_ZEROCOPY, &enable, sizeof(enable));
-	if (ret){
-		perror("setsockopt() to set SO_ZEROCOPY (connect)\n");
-		return ncclSystemError;
-	}
-
 	// 3.) Use the handle to where we are connecting to
 	//		- this was created in listen and NCCL core sent this data out-of-band
 	struct sockaddr_in saddr = connect_handle -> addr;
@@ -457,7 +381,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 	unsigned short port = ntohs(saddr.sin_port);
 	INFO(NCCL_NET | NCCL_INIT, "Prepreparing to connect to:\n\tIP addr: %s\n\tPort: %u\n", ip_addr, port);
 
-	// 4.) call connect for normal sock
+	// 4.) call connect
 	ret = connect(connectingFd, &saddr, sizeof(struct sockaddr_in));
 	if (ret == -1){
 		if (errno != EINPROGRESS){
@@ -465,24 +389,11 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			return ncclSystemError;
 		}
 		connect_handle -> in_progress = 1;
-	}
-	else{
-		connect_handle -> is_connected = 1;
+		return ncclSuccess;
 	}
 
-	// 5.) call connect for ctrl
-	ret = connect(ctrlFd, &saddr, sizeof(struct sockaddr_in));
-	if (ret == -1){
-		if (errno != EINPROGRESS){
-			perror("connect() for ctrl and errno not in progress");
-			return ncclSystemError;
-		}
-		connect_handle -> in_progress_ctrl = 1;
-	}
-	else{
-		// otherwise we have connected. next call to connect we will send
-		connect_handle -> is_ctrl_connected = 1;
-	}
+	// otherwise we have connected. next call to connect we will send
+	connect_handle -> is_connected = 1;
 
 	return ncclSuccess;
 }
@@ -506,16 +417,15 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 
 	int acceptedFd;
 
-	// if we've already confirmed regular socket and now need to confirm control socket
-	if ((dedup_listen_comm -> has_confirmed_reg) && (dedup_listen_comm -> ctrlFd != -1)){
+	if (dedup_listen_comm -> acceptedFd != -1){
 
-		INFO(NCCL_NET | NCCL_INIT, "Already accepted on listenFd #%d, with accepted fd #%d. Waiting to receive confirm on ctrl socket!\n", listenFd, dedup_listen_comm -> ctrlFd);
+		INFO(NCCL_NET | NCCL_INIT, "Already accepted on listenFd #%d, with accepted fd #%d. Waiting to receive confirm!\n", listenFd, dedup_listen_comm -> acceptedFd);
 
-		acceptedFd = dedup_listen_comm -> ctrlFd;
+		acceptedFd = dedup_listen_comm -> acceptedFd;
 
 		// now need to send a byte on the this socket so the other side knows we have accepted
-		char ctrl_sock;
-		ssize_t recv_bytes = recv(acceptedFd, &ctrl_sock, 1, 0);
+		char is_ready;
+		ssize_t recv_bytes = recv(acceptedFd, &is_ready, 1, 0);
 
 		// assume that the receviing 1 byte will be ready...
 		if (recv_bytes == -1){
@@ -527,8 +437,6 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 			perror("recv()");
 			return ncclSystemError;
 		}
-
-		// assert ctrl_sock == 2
 
 		// we successfully received results and can now return!
 
@@ -540,76 +448,38 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 
 		memcpy(&(dedup_recv_comm -> src_addr), &(dedup_listen_comm -> src_addr), sizeof(struct sockaddr_in));
 		dedup_recv_comm -> dev_num = dedup_listen_comm -> dev_num;
-		dedup_recv_comm -> fd = dedup_listen_comm -> fd;
-		dedup_recv_comm -> ctrlFd = dedup_listen_comm -> ctrlFd;
+		dedup_recv_comm -> fd = acceptedFd;
 		
 
 		*recvComm = dedup_recv_comm;
 
 
-		INFO(NCCL_NET | NCCL_INIT, "Successful accept() on listenFd #%d!\n\tFd: %d\n\tCntrl Fd: %d\n", listenFd, dedup_recv_comm -> fd, dedup_recv_comm -> ctrlFd);
+		INFO(NCCL_NET | NCCL_INIT, "Successful accept() on listenFd #%d!\n\tAccepted Fd: %d\n", listenFd, acceptedFd);
 
 		return ncclSuccess;
-
-
 	}
 
-	// if we've accepted regular socket but haven't confirmed it
-	// the next time around
-	if ((dedup_listen_comm -> fd != -1) && (dedup_listen_comm -> has_confirmed_reg == 0)){
+	struct sockaddr_in remote_sockaddr;
+	socklen_t remote_len = sizeof(remote_sockaddr);
 
-		INFO(NCCL_NET | NCCL_INIT, "Already accepted on listenFd #%d, with accepted fd #%d. Waiting to receive confirm on reg socket!\n", listenFd, dedup_listen_comm -> fd);
+	acceptedFd = accept4(listenFd, (struct sockaddr *) &remote_sockaddr, &remote_len, SOCK_NONBLOCK);
 
-		acceptedFd = dedup_listen_comm -> fd;
-
-		// now need to send a byte on the this socket so the other side knows we have accepted
-		char reg_sock;
-		ssize_t recv_bytes = recv(acceptedFd, &reg_sock, 1, 0);
-
-		// assume that the receviing 1 byte will be ready...
-		if (recv_bytes == -1){
-
-			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
-				return ncclSuccess;
-			}
-
-			perror("recv()");
+	if (acceptedFd == -1){
+		// no one is trying to connect
+		if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+			INFO(NCCL_NET | NCCL_INIT, "No accepts() ready for dev #%d, using listen fd #%d!\n", dedup_listen_comm -> dev_num, listenFd);
+			return ncclSuccess;
+		}
+		else{
+			// otherwise we will fail
+			perror("accept()");
 			return ncclSystemError;
 		}
-
-		dedup_listen_comm -> has_confirmed_reg = 1;
+		
 	}
 
-	if ((dedup_listen_comm -> fd != -1) || (dedup_listen_comm -> ctrlFd != -1)){
-		struct sockaddr_in remote_sockaddr;
-		socklen_t remote_len = sizeof(remote_sockaddr);
-
-		acceptedFd = accept4(listenFd, (struct sockaddr *) &remote_sockaddr, &remote_len, SOCK_NONBLOCK);
-
-		if (acceptedFd == -1){
-			// no one is trying to connect
-			if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
-				INFO(NCCL_NET | NCCL_INIT, "No accepts() ready for dev #%d, using listen fd #%d!\n", dedup_listen_comm -> dev_num, listenFd);
-				return ncclSuccess;
-			}
-			else{
-				// otherwise we will fail
-				perror("accept()");
-				return ncclSystemError;
-			}
-			
-		}
-
-		// if this is the first accept
-		if (dedup_listen_comm -> fd == -1){
-			dedup_listen_comm -> fd = acceptedFd;
-			memcpy(&(dedup_listen_comm -> src_addr), &remote_sockaddr, sizeof(struct sockaddr_in));
-		}
-		// must have been control socket
-		else{
-			dedup_listen_comm -> ctrlFd = acceptedFd;
-		}
-	}
+	dedup_listen_comm -> acceptedFd = acceptedFd;
+	memcpy(&(dedup_listen_comm -> src_addr), &remote_sockaddr, sizeof(struct sockaddr_in));
 	
 	// next iteration of accept() we will try to recv data from connecting side...
 
