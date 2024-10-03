@@ -482,6 +482,9 @@ ncclResult_t netDedup_accept_v7(void * listenComm, void ** recvComm, ncclNetDevi
 }
 
 
+// Following implementation from https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
+//	regarding what errors to return
+
 ncclResult_t netDedup_regMr(void * comm, void * data, size_t size, int type, void ** mhandle) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called regMr()\n");
@@ -531,6 +534,8 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 
 	INFO(NCCL_NET | NCCL_INIT, "Calling isend() on dev #%d!\n\tSize: %d", dev_num, size);
 
+	// CALLING EXIT HERE TO CONFIRM THAT THE CONNECTION ESTABLISHMENT WORKED!
+	exit(1);
 
 	return ncclInvalidUsage;
 }
@@ -542,14 +547,16 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 
 	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
 
+	// CALLING EXIT HERE TO CONFIRM THAT THE CONNECTION ESTABLISHMENT WORKED!
+	exit(1);
+
 	return ncclInvalidUsage;
 }
 
 ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, void ** mhandles, void ** request) {
 	
 	INFO(NCCL_NET | NCCL_INIT, "Called iflush()\n");
-
-	return ncclInvalidUsage;
+	return ncclInternalError;
 }
 
 ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
@@ -566,6 +573,8 @@ ncclResult_t netDedup_closeSend(void * sendComm) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called closeSend() for fd: %d\n", dedup_send_comm -> fd);
 
+	close(dedup_send_comm -> fd);
+
 	free(dedup_send_comm);
 
 	return ncclSuccess;
@@ -577,6 +586,8 @@ ncclResult_t netDedup_closeRecv(void * recvComm) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called closeRecv() for fd: %d\n", dedup_recv_comm -> fd);
 
+	close(dedup_recv_comm -> fd);
+
 	free(dedup_recv_comm);
 
 	return ncclSuccess;
@@ -585,10 +596,14 @@ ncclResult_t netDedup_closeRecv(void * recvComm) {
 
 ncclResult_t netDedup_closeListen(void * listenComm) {
 
+	
+
 	Dedup_Listen_Comm * dedup_listen_comm = (Dedup_Listen_Comm *) listenComm;
 	int listenFd = dedup_listen_comm -> listenFd;
 
 	INFO(NCCL_NET | NCCL_INIT, "Called closeListen() for listenFd: %d\n", listenFd);
+
+	close(listenFd);
 
 	free(dedup_listen_comm);
 
@@ -600,7 +615,7 @@ ncclResult_t netDedup_getDeviceMr(void * comm, void * mhandle, void ** dptr_mhan
 
 	INFO(NCCL_NET | NCCL_INIT, "Called getDeviceMr()\n");
 
-	return ncclInvalidUsage;
+	return ncclInternalError;
 }
 
 
@@ -608,5 +623,5 @@ ncclResult_t netDedup_irecvConsumed(void * recvComm, int n, void * request) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called irecvConsumed()\n");
 
-	return ncclInvalidUsage;
+	return ncclInternalError;
 }
