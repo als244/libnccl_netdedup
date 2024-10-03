@@ -350,15 +350,6 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 
 	connect_handle -> connectingFd = connectingFd;
 
-	int ctrlFd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-	if (ctrlFd < 0){
-		perror("socket() for ctrlFd in connect");
-		return ncclSystemError;
-	}
-
-	connect_handle -> ctrlFd = ctrlFd;
-
-
 	// 2.) Set socket options
 	int enable = 1;
 	ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
