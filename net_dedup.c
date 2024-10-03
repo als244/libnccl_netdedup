@@ -273,6 +273,8 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 
 	if (connect_handle -> is_connected){
 
+		INFO(NCCL_NET | NCCL_INIT, "Connected and wating for accept confirm for dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
+
 		char is_ready;	
 		// non-blocking socket so we don't need special flags
 		// the other side sends a byte after accepting()
@@ -280,6 +282,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 
 		if (recv_bytes == -1){
 			if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
+				INFO(NCCL_NET | NCCL_INIT, "No confirmation from dev #%d, using fd #%d!\n", dev, connect_handle -> connectingFd);
 				return ncclSuccess;
 			}
 			else{
@@ -511,11 +514,25 @@ ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 
 
 ncclResult_t netDedup_closeSend(void * sendComm) {
-	return ncclInvalidUsage;
+
+	Dedup_Send_Comm * dedup_send_comm = (Dedup_Send_Comm *) sendComm;
+
+	INFO(NCCL_NET | NCCL_INIT, "Called closeSend() for fd: %d\n", dedup_send_comm -> fd);
+
+	free(dedup_send_comm);
+
+	return ncclSuccess;
 }
 
 ncclResult_t netDedup_closeRecv(void * recvComm) {
-	return ncclInvalidUsage;
+
+	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
+
+	INFO(NCCL_NET | NCCL_INIT, "Called closeRecv() for fd: %d\n", dedup_recv_comm -> fd);
+
+	free(dedup_recv_comm);
+
+	return ncclSuccess;
 }
 
 
