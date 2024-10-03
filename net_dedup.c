@@ -348,6 +348,8 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		return ncclSystemError;
 	}
 
+	connect_handle -> connectingFd = connectingFd;
+
 	// 2.) Set socket options
 	ret = setsockopt(connect_handle -> connectingFd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
 	if (ret != 0){
@@ -360,8 +362,6 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		perror("setsockopt() to set SO_ZEROCOPY\n");
 		return ncclSystemError;
 	}
-
-	connect_handle -> connectingFd = connectingFd;
 
 	// 3.) Use the handle to where we are connecting to
 	//		- this was created in listen and NCCL core sent this data out-of-band
@@ -436,9 +436,6 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 	memcpy(&(dedup_recv_comm -> src_addr), &remote_sockaddr, sizeof(struct sockaddr_in));
 
 	*recvComm = dedup_recv_comm;
-
-	
-
 
 	// now need to send a byte on the this socket so the other side knows we have accepted
 	char is_ready = 1;
