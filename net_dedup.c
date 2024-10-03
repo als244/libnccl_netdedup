@@ -290,7 +290,7 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			ssize_t sent_bytes = send(connect_handle -> connectingFd, &is_ready, 1, 0);
 			
 			// for now just assume the send will go through, but really should have another state here...
-			if (sent_bytes != 1){
+			if (sent_bytes == -1){
 
 				// will try to send again next round
 				if ((errno == EAGAIN) || (errno == EWOULDBLOCK)){
@@ -371,11 +371,9 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			perror("connect() and errno not in progress");
 			return ncclSystemError;
 		}
-		else{
-			connect_handle -> in_progress = 1;
-			return ncclSuccess;
-		}
 	}
+
+	connect_handle -> in_progress = 1;
 
 	return ncclSuccess;
 }
