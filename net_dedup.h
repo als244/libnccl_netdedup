@@ -22,19 +22,23 @@ typedef struct net_dedup_state {
 typedef struct dedup_listen_comm {
 	int dev_num;
 	int listenFd;
-	int acceptedFd;
+	int fd;
+	int has_confirmed_reg;
+	int ctrlFd;
 	struct sockaddr_in src_addr;
 } Dedup_Listen_Comm;
 
 typedef struct dedup_send_comm {
 	int dev_num;
 	int fd;
+	int ctrlFd;
 	struct sockaddr_in dest_addr;
 } Dedup_Send_Comm;
 
 typedef struct dedup_recv_comm {
 	int dev_num;
 	int fd;
+	int ctrlFd;
 	struct sockaddr_in src_addr;
 } Dedup_Recv_Comm;
 
@@ -42,8 +46,12 @@ typedef struct dedup_recv_comm {
 typedef struct dedup_connect_handle {
 	struct sockaddr_in addr;
 	int connectingFd;
+	int ctrlFd;
 	int in_progress;
+	int in_progress_ctrl;
 	int is_connected;
+	int is_sent_connected;
+	int is_ctrl_connected;
 } Dedup_Connect_Handle;
 
 
