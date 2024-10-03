@@ -486,29 +486,42 @@ ncclResult_t netDedup_regMr(void * comm, void * data, size_t size, int type, voi
 
 	INFO(NCCL_NET | NCCL_INIT, "Called regMr()\n");
 
-	return ncclInvalidUsage;
+	if (type != NCCL_PTR_HOST){
+		return ncclInternalError;
+	}
+
+	return ncclSuccess;
 }
 
 ncclResult_t netDedup_regMr_v7(void * comm, void * data, int size, int type, void ** mhandle) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called regMr()\n");
 
-	return ncclInvalidUsage;
+	if (type != NCCL_PTR_HOST){
+		return ncclInternalError;
+	}
+	
+	return ncclSuccess;
 }
 
 
 ncclResult_t netDedup_regMrDmaBuf(void* comm, void* data, size_t size, int type, uint64_t offset, int fd, void** mhandle) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called regMrDmaBuf()\n");
+	
+	INFO(NCCL_NET | NCCL_INIT, "Called regMr()\n");
 
-	return ncclInvalidUsage;
+	if (type != NCCL_PTR_HOST){
+		return ncclInternalError;
+	}
+	
+	return ncclSuccess;
 }
 
 ncclResult_t netDedup_deregMr(void * comm, void * mhandle) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called deregMr()\n");
-
-	return ncclInvalidUsage;
+	return ncclSuccess;
 }
 
 ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, void * mhandle, void ** request) {
