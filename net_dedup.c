@@ -483,19 +483,31 @@ ncclResult_t netDedup_accept_v7(void * listenComm, void ** recvComm, ncclNetDevi
 
 
 ncclResult_t netDedup_regMr(void * comm, void * data, size_t size, int type, void ** mhandle) {
+
+	INFO(NCCL_NET | NCCL_INIT, "Called regMr()\n");
+
 	return ncclInvalidUsage;
 }
 
 ncclResult_t netDedup_regMr_v7(void * comm, void * data, int size, int type, void ** mhandle) {
+
+	INFO(NCCL_NET | NCCL_INIT, "Called regMr()\n");
+
 	return ncclInvalidUsage;
 }
 
 
 ncclResult_t netDedup_regMrDmaBuf(void* comm, void* data, size_t size, int type, uint64_t offset, int fd, void** mhandle) {
+
+	INFO(NCCL_NET | NCCL_INIT, "Called regMrDmaBuf()\n");
+
 	return ncclInvalidUsage;
 }
 
 ncclResult_t netDedup_deregMr(void * comm, void * mhandle) {
+
+	INFO(NCCL_NET | NCCL_INIT, "Called deregMr()\n");
+
 	return ncclInvalidUsage;
 }
 
@@ -521,6 +533,9 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 }
 
 ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, void ** mhandles, void ** request) {
+	
+	INFO(NCCL_NET | NCCL_INIT, "Called iflush()\n");
+
 	return ncclInvalidUsage;
 }
 
@@ -569,10 +584,16 @@ ncclResult_t netDedup_closeListen(void * listenComm) {
 
 
 ncclResult_t netDedup_getDeviceMr(void * comm, void * mhandle, void ** dptr_mhandle) {
+
+	INFO(NCCL_NET | NCCL_INIT, "Called getDeviceMr()\n");
+
 	return ncclInvalidUsage;
 }
 
 
 ncclResult_t netDedup_irecvConsumed(void * recvComm, int n, void * request) {
+
+	INFO(NCCL_NET | NCCL_INIT, "Called irecvConsumed()\n");
+
 	return ncclInvalidUsage;
 }
