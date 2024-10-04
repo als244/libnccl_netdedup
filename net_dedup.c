@@ -527,6 +527,70 @@ ncclResult_t netDedup_deregMr(void * comm, void * mhandle) {
 	return ncclSuccess;
 }
 
+ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, void ** mhandles, void ** request) {
+	
+	INFO(NCCL_NET | NCCL_INIT, "Called iflush()\n");
+	return ncclInternalError;
+}
+
+
+
+/* DEALING WITH SEND() PROTOCOL! */
+
+
+int process_send_header(Dedup_Send_Req * send_req){
+
+	int sockfd = send_req -> sockfd;
+
+	ssize_t sent_bytes = send(sockfd, &(send_req -> is_fingerprint), 1, 0);
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("send() during header send");
+		return -1;
+	}
+
+	// assert sent_byte == 1
+
+	// only 1 byte so if wasnt -1, then we know we sent the header
+	return 1;
+
+}
+
+int process_send_reg_data(Dedup_Send_Req * send_req) {
+
+	int sockfd = send_req -> sockfd;
+
+	void * data = send_req -> data;
+	uint64_t size = send_req -> size;
+	uint64_t offset = send_req -> offset;
+
+	void * cur_data = data + offset;
+	uint64_t remain_bytes = size - offset;
+
+	ssize_t sent_bytes = send(sockfd, cur_data, remain_bytes, 0);
+
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("send() during reg data send");
+		return -1;
+	}
+
+	send_req -> offset += sent_bytes;
+
+	// if we finished sending the whole thing
+	if (send_req -> offset == size){
+		return 1;
+	}
+
+	// if there are some bytes remaining don't indicate to continue to next stage
+	return 0;
+
+}
+
 uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged_fingerprints){
 
 	Fingerprinting_Settings * settings = &((net_dedup_state.global_fingerprint_cache) -> fingerprinting_settings);
@@ -611,95 +675,6 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	send_state -> cur_reply_content_fingerprint_offset = 0;
 
 	return 1;
-}
-
-
-
-ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, int * tags, void ** mhandles, void ** request) {
-
-	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
-	int dev_num = dedup_recv_comm -> dev_num;
-
-	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
-
-	Dedup_Send_Req * recv_req = malloc(sizeof(Dedup_Recv_Req));
-	if (!recv_req){
-		perror("malloc() for send_req");
-		return ncclSystemError;
-	}
-
-	recv_req -> sockfd = dedup_recv_comm -> fd;
-	recv_req -> size = sizes[0];
-	recv_req -> data = data[0];
-	recv_req -> offset = 0;
-	recv_req -> stage = RECV_HEADER;
-
-	// CALLING EXIT HERE TO CONFIRM THAT THE CONNECTION ESTABLISHMENT WORKED!
-	WARN("No irecv() implementation, exiting...!");
-
-	exit(1);
-
-	return ncclInvalidUsage;
-}
-
-ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, void ** mhandles, void ** request) {
-	
-	INFO(NCCL_NET | NCCL_INIT, "Called iflush()\n");
-	return ncclInternalError;
-}
-
-
-int process_send_header(Dedup_Send_Req * send_req){
-
-	int sockfd = send_req -> sockfd;
-
-	ssize_t sent_bytes = send(sockfd, &(send_req -> is_fingerprint), 1, 0);
-	if (sent_bytes == -1){
-		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
-			return 0;
-		}
-		perror("send() during header send");
-		return -1;
-	}
-
-	// assert sent_byte == 1
-
-	// only 1 byte so if wasnt -1, then we know we sent the header
-	return 1;
-
-}
-
-int process_send_reg_data(Dedup_Send_Req * send_req) {
-
-	int sockfd = send_req -> sockfd;
-
-	void * data = send_req -> data;
-	uint64_t size = send_req -> size;
-	uint64_t offset = send_req -> offset;
-
-	void * cur_data = data + offset;
-	uint64_t remain_bytes = size - offset;
-
-	ssize_t sent_bytes = send(sockfd, cur_data, remain_bytes, 0);
-
-	if (sent_bytes == -1){
-		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
-			return 0;
-		}
-		perror("send() during reg data send");
-		return -1;
-	}
-
-	send_req -> offset += sent_bytes;
-
-	// if we finished sending the whole thing
-	if (send_req -> offset == size){
-		return 1;
-	}
-
-	// if there are some bytes remaining don't indicate to continue to next stage
-	return 0;
-
 }
 
 int process_send_fingerprint_header(Dedup_Send_Req * send_req){
@@ -853,7 +828,6 @@ void process_send_complete(Dedup_Send_Req * send_req){
 		free(send_req -> send_fingerprint_state.packaged_fingerprints);
 		free(send_req -> send_fingerprint_state.content_refs);
 		free(send_req -> send_fingerprint_state.missing_fingerprint_inds);
-		free(send_req);
 	}
 	return;
 }
@@ -926,7 +900,7 @@ int process_send(Dedup_Send_Req * send_req){
 				return -1;
 		}
 		if (to_continue == -1){
-			fprintf(stderr, "Error: unable to process during stage: %d\n", send_req -> stage);
+			fprintf(stderr, "Error: unable to process send during stage: %d\n", send_req -> stage);
 			return -1;
 		}
 	}
@@ -969,6 +943,8 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 		send_req -> is_fingerprint = 0;
 	}
 
+	send_req -> stage = SEND_HEADER;
+
 	// process as much as we can
 	// send_req state will be updated for as far as we get
 	// it will continue to progress every time "test" is called
@@ -992,15 +968,275 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 }
 
 
-int process_recv(Dedup_Recv_Req * recv_req){
+/* DEALING WITH RECV() PROTOCOL! */
+
+int process_recv_header(Dedup_Recv_Req * recv_req){
+
+	int sockfd = recv_req -> sockfd;
+
+	ssize_t recv_bytes = send(sockfd, &(recv_req -> is_fingerprint), 1, 0);
+	if (recv_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("recv() during header send");
+		return -1;
+	}
+
+	// assert sent_byte == 1
+
+	// only 1 byte so if wasnt -1, then we know we sent the header
+	return 1;
+
+}
+
+int process_recv_reg_data(Dedup_Recv_Req * recv_req) {
+
+	int sockfd = recv_req -> sockfd;
+
+	void * data = recv_req -> app_buffer;
+	uint64_t size = recv_req -> size;
+	uint64_t offset = recv_req -> app_offset;
+
+	void * cur_data = data + offset;
+	uint64_t remain_bytes = size - offset;
+
+	ssize_t recv_bytes = recv(sockfd, cur_data, remain_bytes, 0);
+
+	if (recv_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("recv() during reg data recv");
+		return -1;
+	}
+
+	recv_req -> app_offset += recv_bytes;
+
+	// if we finished sending the whole thing
+	if (recv_req -> app_offset == size){
+		return 1;
+	}
+
+	// if there are some bytes remaining don't indicate to continue to next stage
+	return 0;
+}
 
 
+int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
+
+	int sockfd = recv_req -> sockfd;
+
+	int prev_recv = recv_req -> recv_fingerprint_header_offset;
+	void * cur_header = &(recv_req -> fingerprint_header) + prev_recv;
+	size_t remain_size = sizeof(Fingerprint_Header) - prev_recv;
+
+	ssize_t recv_bytes = recv(sockfd, cur_header, remain_size, 0);
+	if (recv_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("recv() during fingerprint header send");
+		return -1;
+	}	
+
+	// if we didn't finish sending the header
+	if (recv_bytes < remain_size){
+		recv_req -> recv_fingerprint_header_offset += recv_bytes;
+		return 0;
+	}
+
+	// otherwise we sent the entire header, so we can continue
+	uint64_t num_fingerprints = recv_req -> fingerprint_header.num_fingerprints;
+	recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes = num_fingerprints * sizeof(Fingerprint);
+	return 1;
+}
+
+int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
+
+	int sockfd = recv_req -> sockfd;
+
+	int prev_recv = recv_req -> recv_fingerprint_state.recv_fingerprint_offset;
+
+	void * cur_packaged_fingerprints = ((void *) recv_req -> recv_fingerprint_state.packaged_fingerprints) + prev_recv;
+
+	uint64_t packaged_fingerprints_size_bytes = recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes;
+
+	size_t remain_size = packaged_fingerprints_size_bytes - prev_recv;
+
+	ssize_t recv_bytes = recv(sockfd, cur_packaged_fingerprints, remain_size, 0);
+	if (recv_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("recv() during packaged fingerprints");
+		return -1;
+	}
+
+	if (recv_bytes < remain_size){
+		recv_req -> recv_fingerprint_state.recv_fingerprint_offset += recv_bytes;
+		return 0;
+	}
+
+	// otherwise we sent the whole thing so we can continue
+	return 1;
+}
 
 
+int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
 }
 
 
+int process_send_missing_fingerprint_header(Dedup_Recv_Req * recv_req){
+
+}
+
+
+int process_recv_missing_content(Dedup_Recv_Req * recv_req){
+
+}
+
+
+
+void process_recv_complete(Dedup_Recv_Req * recv_req){
+
+	if (recv_req -> is_fingerprint){
+		free(recv_req -> recv_fingerprint_state.packaged_fingerprints);
+		free(recv_req -> recv_fingerprint_state.missing_fingerprint_slots);
+		free(recv_req -> recv_fingerprint_state.missing_fingerprint_inds);
+	}
+	return;
+}
+
+
+int process_recv(Dedup_Recv_Req * recv_req){
+
+	int to_continue = 1;
+	while (to_continue){
+		switch (recv_req -> stage){
+			case RECV_HEADER:
+				to_continue = process_recv_header(recv_req);
+				if (to_continue == 1){
+					if (recv_req -> is_fingerprint){
+						recv_req -> stage = RECV_FINGERPRINT_HEADER;
+					}
+					else{
+						recv_req -> stage = RECV_REG_DATA;
+					}
+				}
+				break;
+			case RECV_REG_DATA:
+				to_continue = process_recv_reg_data(recv_req);
+				if (to_continue == 1){
+					recv_req -> stage = RECV_COMPLETE;
+				}
+				break;
+			case RECV_FINGERPRINT_HEADER:
+				to_continue = process_recv_fingerprint_header(recv_req);
+				if (to_continue == 1){
+					recv_req -> stage = RECV_PACKAGED_FINGERPRINTS;
+				}
+				break;
+
+			case RECV_PACKAGED_FINGERPRINTS:
+				to_continue = process_recv_packaged_fingerprints(recv_req);
+				if (to_continue == 1){
+					recv_req -> stage = POPULATE_FROM_NET_CACHE;
+				}
+				break;
+			case POPULATE_FROM_NET_CACHE:
+				to_continue = process_populate_from_net_cache(recv_req);
+				if (to_continue == 1){
+					recv_req -> stage = SEND_MISSING_FINGERPRINT_HEADER;
+				}
+				break;
+			case SEND_MISSING_FINGERPRINT_HEADER:
+				to_continue = process_send_missing_fingerprint_header(recv_req);
+				if (to_continue == 1){
+					if ((recv_req -> recv_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints == 0){
+						recv_req -> stage = RECV_COMPLETE;
+					}
+					else{
+						recv_req -> stage = RECV_MISSING_CONTENT;
+					}
+				}
+				break;
+			case RECV_MISSING_CONTENT:
+				to_continue = process_recv_missing_content(recv_req);
+				if (to_continue == 1){
+					recv_req -> stage = SEND_COMPLETE;
+				}
+				break;
+			case RECV_COMPLETE:
+				process_recv_complete(recv_req);
+				return 1;
+			default:
+				fprintf(stderr, "Error: unknown recv request stage: %d...\n", recv_req -> stage);
+				return -1;
+		}
+		if (to_continue == -1){
+			fprintf(stderr, "Error: unable to process recv during stage: %d\n", recv_req -> stage);
+			return -1;
+		}
+	}
+	// if we made it out here then we didn't return from SEND_COMPLETE and also didn't have error, so return 0
+	return 0;
+}
+
+
+
+ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, int * tags, void ** mhandles, void ** request) {
+
+	int ret;
+
+	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
+	int dev_num = dedup_recv_comm -> dev_num;
+
+	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
+
+	Dedup_Req * req = malloc(sizeof(Dedup_Req));
+	if (!req){
+		perror("malloc() for req for send");
+		return ncclSystemError;
+	}
+
+	req -> type = RECV_REQ;
+
+	Dedup_Recv_Req * recv_req = malloc(sizeof(Dedup_Recv_Req));
+	if (!recv_req){
+		perror("malloc() for recv_req");
+		return ncclSystemError;
+	}
+
+	recv_req -> sockfd = dedup_recv_comm -> fd;
+	recv_req -> size = sizes[0];
+	recv_req -> app_filled_size = 0;
+	recv_req -> app_buffer = data[0];
+	recv_req -> app_offset = 0;
+
+	recv_req -> stage = RECV_HEADER;
+
+	// process as much as we can
+	// recv_req state will be updated for as far as we get
+	// it will continue to progress every time "test" is called
+	// (could have seperate threads that process asynchronously)
+	ret = process_recv(recv_req);
+
+	// if there was an error we need to report it
+	if (ret == -1){
+		fprintf(stderr, "Error: had an issue when processing recv\n");
+		return ncclSystemError;
+	}
+
+	// the test function will check if this has completed
+
+	// ensure to save the request
+	req -> req = recv_req;
+	*request = req;
+
+	return ncclSuccess;
+}
 
 
 
@@ -1030,6 +1266,8 @@ ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 
 
 	if (is_complete){
+		// already freed the inner allocations (for fingerprint sends), but still need to free the container
+		free(req -> req);
 		free(req);
 		*done = 1;
 	}

@@ -53,6 +53,7 @@ typedef enum recv_req_stage {
 	RECV_REG_DATA,
 	RECV_FINGERPRINT_HEADER,
 	RECV_PACKAGED_FINGERPRINTS,
+	POPULATE_FROM_NET_CACHE,
 	SEND_MISSING_FINGERPRINT_HEADER,
 	SEND_MISSING_FINGERPRINTS,
 	RECV_MISSING_CONTENT,
@@ -81,6 +82,7 @@ typedef struct missing_fingerprint_header {
 
 typedef struct fingerprint_recv_state {
 	Fingerprint * packaged_fingerprints;
+	uint64_t packaged_fingerprints_size_bytes;
 	uint64_t recv_fingerprint_offset;
 	// maintaining where the missing content should go within app buffer
 	void ** missing_fingerprint_slots;
