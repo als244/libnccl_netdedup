@@ -852,7 +852,7 @@ int process_recv_missing_fingerprints(Dedup_Send_Req * send_req){
 		return 0;
 	}
 
-	INFO(NCCL_NET | NCCL_INIT, "Finished receiving %llu missing fingerprints\n", num_missing_fingerprints);
+	INFO(NCCL_NET | NCCL_INIT, "Finished receiving %llu missing fingerprint on sockfd: %d\n", num_missing_fingerprints, num_missing_fingerprints);
 
 	// otherwise we have received all the missing fingerprint inds
 	return 1;
@@ -878,7 +878,7 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	uint64_t cur_offset = (send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset;
 
-	INFO(NCCL_NET | NCCL_INIT, "In sending missing content:\n\tCur Send fingerprint ind: %llu\n\tCur offset: %llu\n", cur_send_fingerprint_ind, cur_offset);
+	INFO(NCCL_NET | NCCL_INIT, "In sending missing content:\n\tSockfd: %d\n\tTotal missing fingerprints: %llu\n\tCur Send fingerprint ind: %llu\n\tCur offset: %llu\n", sockfd, num_missing_fingerprints, cur_send_fingerprint_ind, cur_offset);
 
 	uint64_t remain_bytes;
 
