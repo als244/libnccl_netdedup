@@ -104,7 +104,7 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 		}
 		num_fingerprints += 1;
 		remain_bytes -= min_chunk_size_bytes;
-		cur_start_ind = min_chunk_size_bytes;
+		cur_start_ind = i + 1;
 		// ensure that we advance where we compute the 
 		// the next segment
 		// (init rabin table has been populaed with the bytes
@@ -131,7 +131,7 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 		magic_check = cur_rabin & magic_mask;
 		// check if we are at cutoff
 		// either magic value match, last byte, or at maximum size boundary
-		if ((magic_check == magic_val) || (i > (num_bytes - min_chunk_size_bytes)) || ((i - cur_start_ind) >= max_chunk_size_bytes)){
+		if ((magic_check == magic_val) || ((i - cur_start_ind) >= max_chunk_size_bytes)){
 			is_done = handle_magic_match(data_bytes, cur_start_ind, i, remain_bytes, min_chunk_size_bytes, num_fingerprints, fingerprints, boundaries, rabin_p, rabin_mask, window_bytes, window);
 			num_fingerprints += 1;
 			remain_bytes -= ((i - cur_start_ind) + 1);
