@@ -775,8 +775,6 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	uint64_t reply_ind;
 
-	void * temp_buffer = malloc(SAFE_MAX_CHUNK_SIZE_BYTES);
-
 	ssize_t sent_bytes;
 
 	// 1.) send as many more fingerprints as possible
@@ -784,6 +782,9 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 	uint64_t cur_offset = (send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset;
 
 	uint64_t remain_bytes;
+
+	// make life easier by doing extra copy into temp buffer instead of dealing with cache page alignment messiness...
+	void * temp_buffer = malloc(SAFE_MAX_CHUNK_SIZE_BYTES);
 	for (uint64_t i = cur_send_fingerprint_ind; i < num_missing_fingerprints; i++){
 		
 		reply_ind = missing_fingerprint_inds[i];
@@ -808,14 +809,14 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = cur_offset + sent_bytes;
 			return ncclSuccess;
 		}
-		// we sent the whole fingerprint so update for next iter
-		else{
-			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind = i + 1;
-			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = 0;
-		}
 
+		// otherwise we sent the whole fingerprint so update for next iter
+		(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind = i + 1;
+		(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = 0;
+	
 		cur_offset = 0;
 	}
+
 	free(temp_buffer);
 
 	// if we complete this loop then we are done
@@ -1046,9 +1047,31 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 		return 0;
 	}
 
-	// otherwise we sent the entire header, so we can continue
+	// otherwise we sent the entire header
+
+	// we need to allocate temporary structures to make life easier
 	uint64_t num_fingerprints = recv_req -> fingerprint_header.num_fingerprints;
 	recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes = num_fingerprints * sizeof(Fingerprint);
+
+	recv_req -> recv_fingerprint_state.packaged_fingerprints = malloc(recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes);
+	if (!recv_req -> recv_fingerprint_state.packaged_fingerprints){
+		perror("malloc() for recving packaged fingerprints");
+		return -1;
+	}
+
+	// assume we will be missing all fingerprints...
+	recv_req -> recv_fingerprint_state.missing_fingerprint_inds = malloc(num_fingerprints * sizeof(uint64_t));
+	if (!recv_req -> recv_fingerprint_state.missing_fingerprint_inds){
+		perror("malloc() for missing fingerprint inds");
+		return -1;
+	}
+
+	recv_req -> recv_fingerprint_state.missing_fingerprint_slots = malloc(num_fingerprints * sizeof(void *));
+	if (!recv_req -> recv_fingerprint_state.missing_fingerprint_slots){
+		perror("malloc() for missing fingerprint slots");
+		return -1;
+	}
+
 	return 1;
 }
 
@@ -1085,16 +1108,165 @@ int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
 
 int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
+	int ret;
+
+	uint64_t num_fingerprints = recv_req -> fingerprint_header.num_fingerprints;
+	Fingerprint * packaged_fingerprints = recv_req -> recv_fingerprint_state.packaged_fingerprints;
+	uint64_t * missing_fingerprint_inds = recv_req -> recv_fingerprint_state.missing_fingerprint_inds;
+	void ** missing_fingerprint_slots = recv_req -> recv_fingerprint_state.missing_fingerprint_slots;
+
+
+	void * cur_app_buffer = recv_req -> app_buffer;
+	uint64_t total_missing_bytes = 0;
+	uint64_t total_bytes = 0;
+	uint64_t num_missing_fingerprints = 0;
+
+	Fingerprint_Entry entry;
+	for (uint64_t i = 0; i < num_fingerprints; i++){
+
+		if (TO_PRINT_INTERCEPT_INFO && TO_PRINT_FINGERPRINT_INFO){
+			printf("Fingerprint #%lu:Content Size: %lu\n\tHex: ", i, packaged_fingerprints[i].content_size);
+			print_sha256(packaged_fingerprints[i].fingerprint);
+			printf("\n");
+		}
+		// Blocking call to the Fingerprint hash table part of 
+		//	system-wide shared memory global_fingerprint_cache (which == /dev/shm/libnetdedup)
+		total_bytes += packaged_fingerprints[i].content_size;
+		ret = lookup_fingerprint(net_dedup_state.global_fingerprint_cache, packaged_fingerprints[i].fingerprint, &entry);
+		if (!ret){
+			missing_fingerprint_inds[num_missing_fingerprints] = i;
+			missing_fingerprint_slots[num_missing_fingerprints] = (void *) cur_app_buffer;
+			num_missing_fingerprints++;
+			total_missing_bytes += packaged_fingerprints[i].content_size;
+		}
+		else{
+			if (TO_PRINT_INTERCEPT_INFO && TO_PRINT_FINGERPRINT_INFO){
+				printf("Found fingerprint ind #%lu!\n", i);
+			}
+			copy_fingerprint_content((void *) cur_app_buffer, net_dedup_state.global_fingerprint_cache, &entry);
+			recv_req -> app_filled_size += packaged_fingerprints[i].content_size;
+		}
+		cur_app_buffer += packaged_fingerprints[i].content_size;
+	}
+
+
+	// maintain global statistics
+	pthread_mutex_lock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
+	net_dedup_state.global_fingerprint_cache -> stats.total_recv_bytes += total_bytes;
+	net_dedup_state.global_fingerprint_cache -> stats.populated_from_cache_bytes += (total_bytes - total_missing_bytes);
+	net_dedup_state.global_fingerprint_cache -> stats.total_fingerprints += num_fingerprints;
+	net_dedup_state.global_fingerprint_cache -> stats.total_found_fingerprints += (num_fingerprints - num_missing_fingerprints);
+	pthread_mutex_unlock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
+
+
+	// set the number of missing fingerprints for next stage to send out
+	recv_req -> recv_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints = num_missing_fingerprints;
+
+	return 1;
 }
 
 
 int process_send_missing_fingerprint_header(Dedup_Recv_Req * recv_req){
+
+	int sockfd = recv_req -> sockfd;
+
+	int prev_sent = recv_req -> recv_fingerprint_state.missing_fingerprint_header_offset;
+
+	void * cur_header = ((void *) &(recv_req -> recv_fingerprint_state.missing_fingerprint_header)) + prev_sent;
+
+	size_t remain_size = sizeof(Missing_Fingerprint_Header) - prev_sent;
+
+	ssize_t sent_bytes = send(sockfd, cur_header, remain_size, 0);
+
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("send() during send missing fingerprints header");
+		return -1;
+	}
+
+	if (sent_bytes < remain_size){
+		recv_req -> recv_fingerprint_state.missing_fingerprint_header_offset += sent_bytes;
+		return 0;
+	}
+
+	return 1;
 
 }
 
 
 int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 
+	int sockfd = recv_req -> sockfd;
+
+	Fingerprint * packaged_fingerprints = recv_req -> recv_fingerprint_state.packaged_fingerprints;
+	uint64_t * missing_fingerprint_inds = recv_req -> recv_fingerprint_state.missing_fingerprint_inds;
+	void ** missing_fingerprint_slots = recv_req -> recv_fingerprint_state.missing_fingerprint_slots;
+
+	uint64_t num_missing_fingerprints = recv_req -> recv_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints;
+
+	uint64_t cur_recv_content_ind = recv_req -> recv_fingerprint_state.cur_recv_content_ind;
+	uint64_t cur_recv_content_offset = recv_req -> recv_fingerprint_state.cur_recv_content_offset;
+
+	void * cur_fingerprint_loc;
+	uint64_t fingerprint_content_remain_size;
+	Fingerprint_Entry new_entry;
+	int ret;
+
+	ssize_t recv_bytes;
+	for (int i = cur_recv_content_ind; i < num_missing_fingerprints; i++){
+			
+		// if we already have received some of this fingerprint then need to insert after
+		cur_fingerprint_loc = missing_fingerprint_slots[i] + cur_recv_content_offset;
+
+		// account for remaining size
+		fingerprint_content_remain_size = packaged_fingerprints[missing_fingerprint_inds[i]].content_size - cur_recv_content_offset;
+		
+
+		recv_bytes = recv(sockfd, cur_fingerprint_loc, fingerprint_content_remain_size, 0);
+		
+		if (recv_bytes == -1){
+			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+				return 0;
+			}
+			perror("recv() during content reply");
+			return -1;
+		}
+
+		// otherwise we received some bytes
+
+		recv_req -> app_filled_size += recv_bytes;
+
+		// if we've only partially recevied this fingerprint content
+		if (recv_bytes < fingerprint_content_remain_size){
+			recv_req -> recv_fingerprint_state.cur_recv_content_ind = i;
+			recv_req -> recv_fingerprint_state.cur_recv_content_offset = cur_recv_content_offset + recv_bytes;
+			return 0;
+		}
+
+
+		// otherwise we've received the whole fingerprint
+
+		// assert recv_req -> app_filled_size = packaged_fingerprints[missing_fingerprint_inds[i]].content_size
+
+		// insert the content into cache
+		ret = insert_fingerprint(net_dedup_state.global_fingerprint_cache, &(packaged_fingerprints[missing_fingerprint_inds[i]]), missing_fingerprint_slots[i], &new_entry);
+		if (ret){
+			fprintf(stderr, "Error: inserting fingerprint failed\n");
+			return -1;
+		}
+
+		recv_req -> recv_fingerprint_state.cur_recv_content_ind = i + 1;
+		recv_req -> recv_fingerprint_state.cur_recv_content_offset = 0;
+
+		cur_recv_content_offset = 0;		
+	}
+
+
+	// if we made it through all the fingerprints we can continue to complete this recv
+	// we will process the recv which frees extra space and then test will finalize
+	return 1;
 }
 
 
