@@ -808,6 +808,8 @@ int process_recv_missing_fingerprint_header(Dedup_Send_Req * send_req){
 		return 0;
 	}
 
+	INFO(NCCL_NET | NCCL_INIT, "Read missing content header: %llu missing fingerprints\n", send_req -> send_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints);
+
 	return 1;
 
 }
@@ -836,8 +838,10 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 	// make life easier by doing extra copy into temp buffer instead of dealing with cache page alignment messiness...
 	void * temp_buffer = malloc(SAFE_MAX_CHUNK_SIZE_BYTES);
 	for (uint64_t i = cur_send_fingerprint_ind; i < num_missing_fingerprints; i++){
-		
+
 		reply_ind = missing_fingerprint_inds[i];
+
+		INFO(NCCL_NET | NCCL_INIT, "Attempting to send missing content for:\n\tMissing fingerprint #%llu\n\tIndex: %llu\n", i, reply_ind);
 
 		copy_fingerprint_content(temp_buffer, net_dedup_state.global_fingerprint_cache, &(content_refs[reply_ind]));
 
@@ -868,6 +872,9 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 	}
 
 	free(temp_buffer);
+
+
+	INFO(NCCL_NET | NCCL_INIT, "Finished sending missing content\n");
 
 	// if we complete this loop then we are done
 	return 1;
