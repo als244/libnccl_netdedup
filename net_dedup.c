@@ -526,8 +526,6 @@ ncclResult_t netDedup_regMr_v7(void * comm, void * data, int size, int type, voi
 ncclResult_t netDedup_regMrDmaBuf(void* comm, void* data, size_t size, int type, uint64_t offset, int fd, void** mhandle) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called regMrDmaBuf()\n");
-	
-	INFO(NCCL_NET | NCCL_INIT, "Called regMr()\n");
 
 	if (type != NCCL_PTR_HOST){
 		return ncclInternalError;
@@ -545,7 +543,7 @@ ncclResult_t netDedup_deregMr(void * comm, void * mhandle) {
 
 ncclResult_t netDedup_getDeviceMr(void * comm, void * mhandle, void ** dptr_mhandle) {
 
-	INFO(NCCL_NET, "Called getDeviceMr()\n");
+	INFO(NCCL_NET | NCCL_INIT, "Called getDeviceMr()\n");
 
 	return ncclInternalError;
 }
@@ -939,7 +937,7 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	Dedup_Send_Comm * dedup_send_comm = (Dedup_Send_Comm *) sendComm;
 	int dev_num = dedup_send_comm -> dev_num;
 
-	INFO(NCCL_NET, "Calling isend() on dev #%d!\n\tSize: %d", dev_num, size);
+	INFO(NCCL_NET | NCCL_INIT, "Calling isend() on dev #%d!\n\tSize: %d", dev_num, size);
 
 	Dedup_Req * req = malloc(sizeof(Dedup_Req));
 	if (!req){
@@ -1388,7 +1386,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
 	int dev_num = dedup_recv_comm -> dev_num;
 
-	INFO(NCCL_NET, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
+	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
 
 	Dedup_Req * req = malloc(sizeof(Dedup_Req));
 	if (!req){
@@ -1406,9 +1404,9 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 
 	recv_req -> sockfd = dedup_recv_comm -> fd;
 	recv_req -> size = sizes[0];
-	recv_req -> app_filled_size = 0;
 	recv_req -> app_buffer = data[0];
 	recv_req -> app_offset = 0;
+	recv_req -> app_filled_size = 0;
 
 	recv_req -> stage = RECV_HEADER;
 
@@ -1439,7 +1437,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 
 ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 
-
+	*done = 0;
 
 	Dedup_Req * req = (Dedup_Req *) request;
 
@@ -1449,7 +1447,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 
 	if (type == SEND_REQ){
 
-		INFO(NCCL_NET, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
+		INFO(NCCL_NET | NCCL_INIT, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
 
 		is_complete = process_send((Dedup_Send_Req *) (req -> req));
 		if (is_complete == -1){
@@ -1459,7 +1457,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 
 	if (type == RECV_REQ){
 
-		INFO(NCCL_NET, "Called test() for recv() with fd: %d\n", ((Dedup_Recv_Req *) (req -> req)) -> sockfd);
+		INFO(NCCL_NET | NCCL_INIT, "Called test() for recv() with fd: %d\n", ((Dedup_Recv_Req *) (req -> req)) -> sockfd);
 
 		is_complete = process_recv((Dedup_Recv_Req *) (req -> req));
 		if (is_complete == -1){
@@ -1490,7 +1488,7 @@ ncclResult_t netDedup_irecvConsumed(void * recvComm, int n, void * request) {
 
 	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
 
-	INFO(NCCL_NET, "Called irecvConsumed() for fd: %d\n", dedup_recv_comm -> fd);
+	INFO(NCCL_NET | NCCL_INIT, "Called irecvConsumed() for fd: %d\n", dedup_recv_comm -> fd);
 
 	Dedup_Req * req = (Dedup_Req *) request;
 
@@ -1506,7 +1504,7 @@ ncclResult_t netDedup_closeSend(void * sendComm) {
 
 	Dedup_Send_Comm * dedup_send_comm = (Dedup_Send_Comm *) sendComm;
 
-	INFO(NCCL_NET, "Called closeSend() for fd: %d\n", dedup_send_comm -> fd);
+	INFO(NCCL_NET | NCCL_INIT, "Called closeSend() for fd: %d\n", dedup_send_comm -> fd);
 
 	close(dedup_send_comm -> fd);
 
@@ -1519,7 +1517,7 @@ ncclResult_t netDedup_closeRecv(void * recvComm) {
 
 	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
 
-	INFO(NCCL_NET, "Called closeRecv() for fd: %d\n", dedup_recv_comm -> fd);
+	INFO(NCCL_NET | NCCL_INIT, "Called closeRecv() for fd: %d\n", dedup_recv_comm -> fd);
 
 	close(dedup_recv_comm -> fd);
 

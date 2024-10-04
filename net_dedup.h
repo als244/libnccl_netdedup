@@ -126,9 +126,10 @@ typedef struct dedup_recv_req {
 	int recv_fingerprint_header_offset;
 	Fingerprint_Recv_State recv_fingerprint_state;
 	uint64_t size;
-	uint64_t app_filled_size;
 	void * app_buffer;
 	uint64_t app_offset;
+	// for debugging purposes dealing with partially filling content before reply
+	uint64_t app_filled_size;
 } Dedup_Recv_Req;
 
 
