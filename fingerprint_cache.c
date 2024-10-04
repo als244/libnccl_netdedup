@@ -125,7 +125,7 @@ int insert_fingerprint(Fingerprint_Cache * cache, Fingerprint * new_fingerprint,
 	int ret = insert_fingerprint_cache(cache, new_fingerprint, content, entry_ref);
 	if (unlikely(ret)){
 		fprintf(stderr, "Error: could not insert fingerprint to cache\n");
-		pthread_mutex_unlock(&(cache -> cache_lock));
+		//pthread_mutex_unlock(&(cache -> cache_lock));
 		return -1;
 	}
 
@@ -136,7 +136,7 @@ int insert_fingerprint(Fingerprint_Cache * cache, Fingerprint * new_fingerprint,
 		ret = insert_fingerprint_table(&(cache -> table), new_fingerprint -> fingerprint, entry_ref);
 		if (ret){
 			fprintf(stderr, "Error: could not insert fingerprint to table\n");
-			pthread_mutex_unlock(&(cache -> cache_lock));
+			//pthread_mutex_unlock(&(cache -> cache_lock));
 			return -1;
 		}
 	}

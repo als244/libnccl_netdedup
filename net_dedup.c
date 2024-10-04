@@ -671,10 +671,15 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 
 	uint64_t num_fingerprints = dedup_fingerprinting(data, size, &(send_state -> packaged_fingerprints));
 	fingerprint_header -> num_fingerprints = num_fingerprints;
+
+	INFO(NCCL_NET | NCCL_INIT, "Completed compute_fingerprints():\n\tNum fingerprints: %llu\n", num_fingerprints);
+
 	return 1;
 }
 
 int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
+
+	INFO(NCCL_NET | NCCL_INIT, "In insert outbound fingerprints\n");
 
 	// 1.) try to obtain cache lock
 	if (pthread_mutex_trylock(&(net_dedup_state.global_fingerprint_cache -> cache_lock)) != 0){
@@ -682,6 +687,7 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 	}
 
 	// we obtained the lock, so continue
+	INFO(NCCL_NET | NCCL_INIT, "Obtained cache lock!\n");
 
 
 	// 2.) insert all the fingerprints into local cache to retrieve content refs
@@ -742,7 +748,9 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 	send_state -> cur_reply_content_fingerprint_ind = 0;
 	send_state -> cur_reply_content_fingerprint_offset = 0;
 
-	INFO(NCCL_NET | NCCL_INIT, "Completed compute_fingerprints()\n");
+	
+
+	INFO(NCCL_NET | NCCL_INIT, "Finished inserting outbound fingerprints\n");
 
 	return 1;
 }
@@ -1506,6 +1514,8 @@ int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 
 int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 
+	INFO(NCCL_NET | NCCL_INIT, "In insert inbound fingerprints\n");
+
 	if (pthread_mutex_trylock(&(net_dedup_state.global_fingerprint_cache -> cache_lock)) != 0){
 		return 0;
 	}
@@ -1528,6 +1538,8 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 	}
 
 	pthread_mutex_unlock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
+
+	INFO(NCCL_NET | NCCL_INIT, "Finished inserting inbound fingerprints\n");
 
 	return 1;
 }
