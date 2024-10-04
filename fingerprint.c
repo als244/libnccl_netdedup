@@ -92,6 +92,7 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 
 	// special case of immediate magic match
 	magic_check = cur_rabin & magic_mask;
+	uint64_t i = min_chunk_size_bytes;
 	if ((num_bytes < min_chunk_size_bytes) || (magic_check == magic_val)){
 		is_done = handle_magic_match(data_bytes, 0, min_chunk_size_bytes, remain_bytes, min_chunk_size_bytes, num_fingerprints, fingerprints, boundaries, rabin_p, rabin_mask, window_bytes, window);
 		if (is_done){
@@ -100,7 +101,8 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 		}
 		num_fingerprints += 1;
 		remain_bytes -= min_chunk_size_bytes;
-		cur_start_ind = min_chunk_size_bytes - window_bytes;
+		cur_start_ind = min_chunk_size_bytes;
+		i += (min_chunk_size_bytes - window_bytes);
 	}
 
 
@@ -110,7 +112,7 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 	
 	uint64_t rabin_diff;
 
-	uint64_t i = min_chunk_size_bytes;
+	
 	while(!is_done){
 		cur_data_byte = data_bytes[i];
 		rabin_diff = cur_rabin - rabin_table[window[window_slot]];
