@@ -170,7 +170,7 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props);
 ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm);
 ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclNetDeviceHandle_v8_t** sendDevComm);
 ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDeviceHandle_v8_t ** recvDevComm);
-ncclResult_t netDedup_regMr(void * comm, void * data, size_t size, int type, void ** mhandle);
+ncclResult_t netDedup_regMr_v8(void * comm, void * data, size_t size, int type, void ** mhandle);
 ncclResult_t netDedup_regMrDmaBuf(void* comm, void* data, size_t size, int type, uint64_t offset, int fd, void** mhandle);
 ncclResult_t netDedup_deregMr(void * comm, void * mhandle);
 ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, void * mhandle, void ** request);

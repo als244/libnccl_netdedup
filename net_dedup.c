@@ -500,7 +500,7 @@ ncclResult_t netDedup_closeListen(void * listenComm) {
 // Following implementation from https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
 //	regarding what errors to return
 
-ncclResult_t netDedup_regMr(void * comm, void * data, size_t size, int type, void ** mhandle) {
+ncclResult_t netDedup_regMr_v8(void * comm, void * data, size_t size, int type, void ** mhandle) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called regMr()\n");
 
