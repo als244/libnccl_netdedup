@@ -10,6 +10,7 @@
 #define COLL_PLUGIN_NAME "CollDedup"
 
 
+Fingerprint_Cache * global_fingerprint_cache;
 Net_Dedup_State net_dedup_state;
 
 int active_fds[MAX_FDS];
