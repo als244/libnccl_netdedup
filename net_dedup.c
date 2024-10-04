@@ -816,6 +816,8 @@ int process_recv_missing_fingerprint_header(Dedup_Send_Req * send_req){
 
 int process_recv_missing_fingerprints(Dedup_Send_Req * send_req){
 
+	INFO(NCCL_NET | NCCL_INIT, "In recv missing fingerprints\n");
+
 	int sockfd = send_req -> sockfd;
 
 	uint64_t num_missing_fingerprints = send_req -> send_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints;
@@ -825,12 +827,10 @@ int process_recv_missing_fingerprints(Dedup_Send_Req * send_req){
 	uint64_t recv_missing_fingerprint_inds_offset = send_req -> send_fingerprint_state.recv_missing_fingerprint_inds_offset;
 
 	uint64_t * missing_fingerprint_inds = send_req -> send_fingerprint_state.missing_fingerprint_inds;
+
 	void * cur_missing_fingerprints = ((void *) missing_fingerprint_inds) + recv_missing_fingerprint_inds_offset;
 	
-
 	uint64_t remain_size = total_size - recv_missing_fingerprint_inds_offset;
-
-
 
 	ssize_t recv_bytes = recv(sockfd, cur_missing_fingerprints, remain_size, 0);
 
@@ -846,6 +846,8 @@ int process_recv_missing_fingerprints(Dedup_Send_Req * send_req){
 		send_req -> send_fingerprint_state.recv_missing_fingerprint_inds_offset += recv_bytes;
 		return 0;
 	}
+
+	INFO(NCCL_NET | NCCL_INIT, "Finished receiving %llu missing fingerprints\n", num_missing_fingerprints);
 
 	// otherwise we have received all the missing fingerprint inds
 	return 1;
@@ -874,6 +876,7 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	// make life easier by doing extra copy into temp buffer instead of dealing with cache page alignment messiness...
 	void * temp_buffer = malloc(SAFE_MAX_CHUNK_SIZE_BYTES);
+	
 	for (uint64_t i = cur_send_fingerprint_ind; i < num_missing_fingerprints; i++){
 
 		reply_ind = missing_fingerprint_inds[i];
@@ -888,6 +891,7 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 		sent_bytes = send(sockfd, temp_buffer + cur_offset, remain_bytes, 0);
 
 		if (sent_bytes == -1){
+			free(temp_buffer);
 			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
 				return 0;
 			}
@@ -898,7 +902,8 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 		if (sent_bytes < remain_bytes){
 			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind = i;
 			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = cur_offset + sent_bytes;
-			return ncclSuccess;
+			free(temp_buffer);
+			return 0;
 		}
 
 		// otherwise we sent the whole fingerprint so update for next iter
