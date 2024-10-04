@@ -646,6 +646,9 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 	Fingerprinting_Settings * settings = &((global_fingerprint_cache) -> fingerprinting_settings);
 	uint64_t max_fingerprints = (n / (settings -> min_chunk_size_bytes)) + 1;
 	uint64_t num_fingerprints;
+
+	printf("Max fingerprints: %llu\n", max_fingerprints);
+	
 	uint8_t * raw_fingerprint_buffer = malloc(max_fingerprints * FINGERPRINT_NUM_BYTES);
 	uint64_t * boundaries = malloc(max_fingerprints * sizeof(uint64_t));
 
@@ -655,6 +658,8 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 		settings -> rabin_p, settings -> rabin_m_bits, settings -> rabin_table, settings -> window_bytes, settings -> lower_bits, settings -> min_chunk_size_bytes, settings -> max_chunk_size_bytes, settings -> magic_val);
 
 	INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\tBuffer Size: %llu\n\tNumber Fingerprints: %llu\n", n, num_fingerprints);
+
+	printf("Num fingerprints: %llu\n", num_fingerprints);
 
 	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
 
