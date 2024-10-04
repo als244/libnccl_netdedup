@@ -828,9 +828,9 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 			return -1;
 		}
 
-		if (sent_bytes < content_refs[reply_ind].content_size){
+		if (sent_bytes < remain_bytes){
 			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind = i;
-			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = sent_bytes;
+			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = cur_offset + sent_bytes;
 			return ncclSuccess;
 		}
 		// we sent the whole fingerprint so update for next iter
