@@ -647,7 +647,7 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 	uint64_t max_fingerprints = (n / (settings -> min_chunk_size_bytes)) + 1;
 	uint64_t num_fingerprints;
 
-	printf("Max fingerprints: %llu\n", max_fingerprints);
+	//printf("Max fingerprints: %lu\n", max_fingerprints);
 
 	uint8_t * raw_fingerprint_buffer = malloc(max_fingerprints * FINGERPRINT_NUM_BYTES);
 	uint64_t * boundaries = malloc(max_fingerprints * sizeof(uint64_t));
@@ -659,7 +659,7 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 
 	INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\tBuffer Size: %llu\n\tNumber Fingerprints: %llu\n", n, num_fingerprints);
 
-	printf("Num fingerprints: %llu\n", num_fingerprints);
+	//printf("Num fingerprints: %lu\n", num_fingerprints);
 
 	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
 
@@ -1771,7 +1771,6 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 		// INFO(NCCL_NET | NCCL_INIT, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
 		if (((Dedup_Send_Req *) req -> req) -> stage != SEND_COMPLETE){
-
 			is_complete = process_send((Dedup_Send_Req *) (req -> req));
 			if (is_complete == -1){
 				//return ncclSystemError;
