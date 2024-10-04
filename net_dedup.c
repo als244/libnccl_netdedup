@@ -27,7 +27,7 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 			sleep(1);
 			fd = shm_open(FINGERPRINT_CACHE_PATH, O_RDWR, 0);
 		}
-		INFO(NCCL_NET | NCCL_INIT, "Found existing fingerprint cache in system, and mmapping it in to address space!\n", pid);
+		INFO(NCCL_NET | NCCL_INIT, "Found existing fingerprint cache in system, and mmapping it in to address space!\n");
 		global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
 		if (!global_fingerprint_cache){
 			fprintf(stderr, "Error: could not mmap fingerprint cache. Exiting...\n");
@@ -37,7 +37,7 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 	}
 	// we just created it
 	else{
-		INFO(NCCL_NET | NCCL_INIT, "Creating and initializing global fingerprint table & cache!\n\tTotal size (table + cache): %lu\n", pid, sizeof(Fingerprint_Cache));
+		INFO(NCCL_NET | NCCL_INIT, "Creating and initializing global fingerprint table & cache!\n\tTotal size (table + cache): %lu\n", sizeof(Fingerprint_Cache));
 		ftruncate(fd, sizeof(Fingerprint_Cache));
 		global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
 		if (!global_fingerprint_cache){
