@@ -978,6 +978,11 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 
 	send_req -> stage = SEND_HEADER;
 
+
+	if (size == 0){
+		send_req -> stage = SEND_COMPLETE;
+	}
+
 	// process as much as we can
 	// send_req state will be updated for as far as we get
 	// it will continue to progress every time "test" is called
