@@ -980,14 +980,12 @@ int process_send(Dedup_Send_Req * send_req){
 					send_req -> stage = SEND_PACKAGED_FINGERPRINTS;
 				}
 				break;
-
 			case SEND_PACKAGED_FINGERPRINTS:
 				to_continue = process_send_packaged_fingerprints(send_req);
 				if (to_continue == 1){
 					send_req -> stage = RECV_MISSING_FINGERPRINT_HEADER;
 				}
 				break;
-
 			case RECV_MISSING_FINGERPRINT_HEADER:
 				to_continue = process_recv_missing_fingerprint_header(send_req);
 				if (to_continue == 1){
@@ -1396,8 +1394,6 @@ int process_send_missing_fingerprints(Dedup_Recv_Req * recv_req){
 
 
 int process_recv_missing_content(Dedup_Recv_Req * recv_req){
-
-	INFO(NCCL_NET | NCCL_INIT, "In recv missing content\n");
 
 	int sockfd = recv_req -> sockfd;
 
