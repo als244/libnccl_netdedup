@@ -103,7 +103,7 @@ int insert_fingerprint(Fingerprint_Cache * cache, Fingerprint * new_fingerprint,
 
 	// for now just doing ugly locking for correctness
 
-	pthread_mutex_lock(&(cache -> cache_lock));
+	//pthread_mutex_lock(&(cache -> cache_lock));
 
 	Fingerprint_Entry * entry_ref;
 
@@ -141,7 +141,7 @@ int insert_fingerprint(Fingerprint_Cache * cache, Fingerprint * new_fingerprint,
 		}
 	}
 
-	pthread_mutex_unlock(&(cache -> cache_lock));
+	//pthread_mutex_unlock(&(cache -> cache_lock));
 	return 0;
 }
 
@@ -151,12 +151,12 @@ int insert_fingerprint(Fingerprint_Cache * cache, Fingerprint * new_fingerprint,
 int lookup_fingerprint(Fingerprint_Cache * cache, uint8_t * fingerprint, Fingerprint_Entry * ret_entry){
 
 	// for now just doing ugly locking for correctness
-	pthread_mutex_lock(&(cache -> cache_lock));
+	//pthread_mutex_lock(&(cache -> cache_lock));
 	
 	// will populate the fingerprint_table
 	uint64_t ret = find_fingerprint_table(&(cache -> table), fingerprint, ret_entry);
 
-	pthread_mutex_unlock(&(cache -> cache_lock));
+	//pthread_mutex_unlock(&(cache -> cache_lock));
 	return ret < FINGERPRINT_TABLE_SIZE;
 }
 

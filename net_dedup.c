@@ -670,10 +670,25 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	// 1.) compute all the fingerprints
 
 	uint64_t num_fingerprints = dedup_fingerprinting(data, size, &(send_state -> packaged_fingerprints));
+	fingerprint_header -> num_fingerprints = num_fingerprints;
+	return 1;
+}
+
+int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
+
+	// 1.) try to obtain cache lock
+	if (pthread_mutex_trylock(&(net_dedup_state.global_fingerprint_cache -> cache_lock)) != 0){
+		return 0;
+	}
+
+	// we obtained the lock, so continue
+
 
 	// 2.) insert all the fingerprints into local cache to retrieve content refs
 
-	Fingerprint * packaged_fingerprints = send_state -> packaged_fingerprints;
+	uint64_t num_fingerprints = send_req -> fingerprint_header.num_fingerprints;
+
+	Fingerprint * packaged_fingerprints = send_req -> send_fingerprint_state.packaged_fingerprints;
 	Fingerprint_Entry * content_refs = malloc(num_fingerprints * sizeof(Fingerprint_Entry));
 	if (!content_refs){
 		perror("malloc() for content refs when computing fingerprints");
@@ -683,6 +698,8 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	INFO(NCCL_NET | NCCL_INIT, "Inserting fingerprints into cache...\n");
 
 	int ret;
+
+	void * data = send_req -> data;
 	void * cur_buffer = data;
 	for (uint64_t i = 0; i < num_fingerprints; i++){
 		// takes care of duplicates
@@ -695,14 +712,17 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 		cur_buffer += packaged_fingerprints[i].content_size;
 	}
 
+	pthread_mutex_unlock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
+
 	INFO(NCCL_NET | NCCL_INIT, "Finished inserting fingerprints into cache...\n");
+
+	
+	Fingerprint_Send_State * send_state = &(send_req -> send_fingerprint_state);
 
 	// save the content refs as part of request
 	send_state -> content_refs = content_refs;
 
 	// 3.) initialize the structures needed for this send request
-
-	fingerprint_header -> num_fingerprints = num_fingerprints;
 
 	// 3a.) sending fingprints
 	send_state -> send_fingerprint_offset = 0;
@@ -979,6 +999,12 @@ int process_send(Dedup_Send_Req * send_req){
 			case COMPUTE_FINGERPRINTS:
 				INFO(NCCL_NET | NCCL_INIT, "Calling compute_fingerprints()\n");
 				to_continue = process_compute_fingerprints(send_req -> data, send_req -> size, &(send_req -> fingerprint_header), &(send_req -> send_fingerprint_state));
+				if (to_continue == 1){
+					send_req -> stage = INSERT_OUTBOUND_FINGERPRINTS;
+				}
+				break;
+			case INSERT_OUTBOUND_FINGERPRINTS:
+				to_continue = process_insert_outbound_fingerprints(send_req);
 				if (to_continue == 1){
 					send_req -> stage = SEND_FINGERPRINT_HEADER;
 				}
@@ -1318,12 +1344,11 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
 
 	// maintain global statistics
-	pthread_mutex_lock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
+	// ideally we'd want these to be atomic, for now ok...
 	net_dedup_state.global_fingerprint_cache -> stats.total_recv_bytes += total_bytes;
 	net_dedup_state.global_fingerprint_cache -> stats.populated_from_cache_bytes += (total_bytes - total_missing_bytes);
 	net_dedup_state.global_fingerprint_cache -> stats.total_fingerprints += num_fingerprints;
 	net_dedup_state.global_fingerprint_cache -> stats.total_found_fingerprints += (num_fingerprints - num_missing_fingerprints);
-	pthread_mutex_unlock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
 
 	uint64_t redudant_bytes = total_bytes - total_missing_bytes;
 	double redudant_ratio = 100 * ((double) redudant_bytes / (double) total_bytes);
@@ -1466,14 +1491,6 @@ int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 		// otherwise we've received the whole fingerprint
 
 		// assert recv_req -> app_filled_size = packaged_fingerprints[missing_fingerprint_inds[i]].content_size
-
-		// insert the content into cache
-		ret = insert_fingerprint(net_dedup_state.global_fingerprint_cache, &(packaged_fingerprints[missing_fingerprint_inds[i]]), missing_fingerprint_slots[i], &new_entry);
-		if (ret){
-			fprintf(stderr, "Error: inserting fingerprint failed\n");
-			return -1;
-		}
-
 		recv_req -> recv_fingerprint_state.cur_recv_content_ind = i + 1;
 		recv_req -> recv_fingerprint_state.cur_recv_content_offset = 0;
 
@@ -1486,6 +1503,34 @@ int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 	return 1;
 }
 
+
+int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
+
+	if (pthread_mutex_trylock(&(net_dedup_state.global_fingerprint_cache -> cache_lock)) != 0){
+		return 0;
+	}
+
+	Fingerprint * packaged_fingerprints = (recv_req -> recv_fingerprint_state).packaged_fingerprints;
+	uint64_t * missing_fingerprint_inds = (recv_req -> recv_fingerprint_state).missing_fingerprint_inds;
+	uint64_t num_missing_fingerprints = (recv_req -> recv_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints;
+	void ** missing_fingerprint_slots = (recv_req -> recv_fingerprint_state).missing_fingerprint_slots;
+
+
+	Fingerprint_Entry new_entry;
+	int ret;
+	for (uint64_t i = 0; i < num_missing_fingerprints; i++){
+		// insert the content into cache
+		ret = insert_fingerprint(net_dedup_state.global_fingerprint_cache, &(packaged_fingerprints[missing_fingerprint_inds[i]]), missing_fingerprint_slots[i], &new_entry);
+		if (ret){
+			fprintf(stderr, "Error: inserting fingerprint failed\n");
+			return -1;
+		}
+	}
+
+	pthread_mutex_unlock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
+
+	return 1;
+}
 
 
 void process_recv_complete(Dedup_Recv_Req * recv_req){
@@ -1559,6 +1604,12 @@ int process_recv(Dedup_Recv_Req * recv_req){
 				break;
 			case RECV_MISSING_CONTENT:
 				to_continue = process_recv_missing_content(recv_req);
+				if (to_continue == 1){
+					recv_req -> stage = INSERT_INBOUND_FINGERPRINTS;
+				}
+				break;
+			case INSERT_INBOUND_FINGERPRINTS:
+				to_continue = processs_insert_inbound_fingerprints(recv_req);
 				if (to_continue == 1){
 					recv_req -> stage = RECV_COMPLETE;
 				}
