@@ -48,9 +48,11 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 
 	char * to_disable = getenv("SKIP_CACHE_INSERTS");
 	if (to_disable && (strncmp(to_disable, "1", 1) == 0)){
+		INFO(NCCL_NET | NCCL_INIT, "Skipping Cache Inserts!");
 		to_skip_cache_inserts = 1;
 	}
 	else{
+		INFO(NCCL_NET | NCCL_INIT, "Inserting Into Caches!");
 		to_skip_cache_inserts = 0;
 	}
 
@@ -993,8 +995,11 @@ void process_send_complete(Dedup_Send_Req * send_req){
 	if (send_req -> header.is_fingerprint){
 		free(send_req -> send_fingerprint_state.packaged_fingerprints);
 		free(send_req -> send_fingerprint_state.boundaries);
-		free(send_req -> send_fingerprint_state.content_refs);
 		free(send_req -> send_fingerprint_state.missing_fingerprint_inds);
+
+		if (!to_skip_cache_inserts){
+			free(send_req -> send_fingerprint_state.content_refs);
+		}
 	}
 	return;
 }
