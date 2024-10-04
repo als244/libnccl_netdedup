@@ -719,6 +719,7 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 		ret = insert_fingerprint(global_fingerprint_cache, &(packaged_fingerprints[i]), cur_buffer, &(content_refs[i]));
 		if (ret){
 			fprintf(stderr, "Error: inserting fingerprint failed\n");
+			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
 			return -1;
 		}
 		cur_buffer += packaged_fingerprints[i].content_size;
@@ -1539,6 +1540,7 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 		ret = insert_fingerprint(global_fingerprint_cache, &(packaged_fingerprints[missing_fingerprint_inds[i]]), missing_fingerprint_slots[i], &new_entry);
 		if (ret){
 			fprintf(stderr, "Error: inserting fingerprint failed\n");
+			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
 			return -1;
 		}
 	}
