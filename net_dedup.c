@@ -42,6 +42,10 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 
 	net_dedup_state.logFunction = logFunction;
 
+	for (int i = 0; i < MAX_FDS; i++){
+		active_fds[i] = 0;
+	}
+
 
 	return ncclSuccess;
 }
@@ -1037,6 +1041,13 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 
 	Dedup_Send_Comm * dedup_send_comm = (Dedup_Send_Comm *) sendComm;
 	int dev_num = dedup_send_comm -> dev_num;
+	int sockfd = dedup_send_comm -> fd;
+
+	if (active_fds[sockfd]){
+		*request = NULL;
+		return ncclSuccess;
+	}
+
 
 	INFO(NCCL_NET | NCCL_INIT, "Calling isend() on dev #%d!\n\tSize: %d", dev_num, size);
 
@@ -1091,6 +1102,8 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	// ensure to save the request
 	req -> req = send_req;
 	*request = req;
+
+	active_fds[sockfd] = 1;
 
 
 	return ncclSuccess;
@@ -1574,6 +1587,12 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 
 	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
 	int dev_num = dedup_recv_comm -> dev_num;
+	int sockfd = dedup_recv_comm -> fd;
+
+	if (active_fds[sockfd]){
+		*request = NULL;
+		return ncclSuccess;
+	}
 
 	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
 
@@ -1621,6 +1640,8 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	req -> req = recv_req;
 	*request = req;
 
+	active_fds[sockfd] = 1;
+
 	return ncclSuccess;
 }
 
@@ -1638,6 +1659,10 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 	int is_complete;
 
+	int sockfd;
+
+
+
 	if (type == SEND_REQ){
 
 		INFO(NCCL_NET | NCCL_INIT, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
@@ -1646,6 +1671,8 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		if (is_complete == -1){
 			return ncclSystemError;
 		}
+
+		sockfd = ((Dedup_Send_Req *) (req -> req)) -> sockfd;
 
 		INFO(NCCL_NET | NCCL_INIT, "Called process_send()\n\tIs Complete: %d\n", is_complete);
 	}
@@ -1656,6 +1683,8 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		if (is_complete == -1){
 			return ncclSystemError;
 		}
+
+		sockfd = ((Dedup_Recv_Req *) (req -> req)) -> sockfd;
 	}
 
 
@@ -1680,6 +1709,8 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		// already freed the inner allocations (for fingerprint sends), but still need to free the container
 		free(req -> req);
 		free(req);
+
+		active_fds[sockfd] = 0;
 	}
 
 	// otherwise is_complete should be zero

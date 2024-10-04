@@ -167,6 +167,7 @@ typedef struct dedup_req {
 
 extern Net_Dedup_State net_dedup_state;
 extern ncclDebugLogger_t nccl_log_func;
+extern int active_fds[MAX_FDS];
 
 
 // EXPORTED NCCL FUNCTIONS USED AS PLUGIN!

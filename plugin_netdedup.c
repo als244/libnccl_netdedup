@@ -12,6 +12,8 @@
 
 Net_Dedup_State net_dedup_state;
 
+int active_fds[MAX_FDS];
+
 ncclDebugLogger_t nccl_log_func;
 
 // Setting the same functions to null as in reference NCCL-Socket implementation:
