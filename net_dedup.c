@@ -707,6 +707,7 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 		perror("malloc() for preparing missing fingerprint inds buffer");
 		return -1;
 	}
+	send_state -> missing_fingerprint_header_offset = 0;
 	send_state -> recv_missing_fingerprint_inds_offset = 0;
 	
 	// 3c.) repalying with content
@@ -1048,6 +1049,8 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 		perror("malloc() for send_req");
 		return ncclSystemError;
 	}
+
+	memset(send_req, 0, sizeof(Dedup_Send_Req));
 
 	send_req -> sockfd = dedup_send_comm -> fd;
 	send_req -> size = size;
@@ -1583,6 +1586,8 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 		perror("malloc() for recv_req");
 		return ncclSystemError;
 	}
+
+	memset(recv_req, 0, sizeof(Dedup_Recv_Req));
 
 	recv_req -> sockfd = dedup_recv_comm -> fd;
 	recv_req -> size = sizes[0];
