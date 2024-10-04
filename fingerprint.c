@@ -104,13 +104,13 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 		}
 		num_fingerprints += 1;
 		remain_bytes -= min_chunk_size_bytes;
-		cur_start_ind = i + 1;
+		cur_start_ind = min_chunk_size_bytes;
 		// ensure that we advance where we compute the 
 		// the next segment
 		// (init rabin table has been populaed with the bytes
 		// now at 2 * min_chunk_size bytes - window_bytes)
 		// would have returned if there wasn't enough for 2 min sin chunk sized chunks
-		i += min_chunk_size_bytes;
+		i += (min_chunk_size_bytes - window_bytes);
 	}
 
 
@@ -131,12 +131,12 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 		magic_check = cur_rabin & magic_mask;
 		// check if we are at cutoff
 		// either magic value match, last byte, or at maximum size boundary
-		if ((magic_check == magic_val) || ((num_bytes - i) <= min_chunk_size_bytes) || ((i - cur_start_ind) >= max_chunk_size_bytes)){
+		if ((magic_check == magic_val) || (i > (num_bytes - min_chunk_size_bytes)) || ((i - cur_start_ind) >= max_chunk_size_bytes)){
 			is_done = handle_magic_match(data_bytes, cur_start_ind, i, remain_bytes, min_chunk_size_bytes, num_fingerprints, fingerprints, boundaries, rabin_p, rabin_mask, window_bytes, window);
 			num_fingerprints += 1;
 			remain_bytes -= ((i - cur_start_ind) + 1);
 			cur_start_ind = i + 1;
-			i += min_chunk_size_bytes;
+			i += (min_chunk_size_bytes - window_bytes);
 			//printf("\n\tRemain Bytes: %lu\n\tCur Start Ind: %lu\n\ti: %lu\n\t Is Done? %d\n\n", remain_bytes, cur_start_ind, i, is_done);
 
 		}
