@@ -1310,12 +1310,12 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
 
 	// set the number of missing fingerprints for next stage to send out
-	recv_req -> recv_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints = num_missing_fingerprints;
+	(recv_req -> recv_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints = num_missing_fingerprints;
 
 
 	INFO(NCCL_NET | NCCL_INIT, "Finished populating from net cache!\n");
 
-	INFO(NCCL_NET | NCCL_INIT, "Capture stats:\n\tRedundant Ratio: %lu / %lu\n\tRedundant Percentage: %.2f%%\n\n", redudant_bytes, total_bytes, redudant_ratio);
+	INFO(NCCL_NET | NCCL_INIT, "Capture stats:\n\tTotal Fingerprints: %llu\n\tFound Fingerprints: %llu\n\nRedundant Ratio: %llu / %llu\n\tRedundant Percentage: %.2f%%\n\n", num_fingerprints, num_missing_fingerprints, redudant_bytes, total_bytes, redudant_ratio);
 
 	return 1;
 }
