@@ -27,23 +27,14 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 			sleep(1);
 			fd = shm_open(FINGERPRINT_CACHE_PATH, O_RDWR, 0);
 		}
-		INFO(NCCL_NET | NCCL_INIT, "Found existing fingerprint cache in system, and mmapping it in to address space!\n");
+		INFO(NCCL_NET | NCCL_INIT, "Found existing fingerprint cache in system, and mmapping it in to address space!\n", pid);
 		global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
-		if (!global_fingerprint_cache){
-			fprintf(stderr, "Error: could not mmap fingerprint cache. Exiting...\n");
-			kill(0, SIGKILL);
-		}
-
 	}
 	// we just created it
 	else{
-		INFO(NCCL_NET | NCCL_INIT, "Creating and initializing global fingerprint table & cache!\n\tTotal size (table + cache): %lu\n", sizeof(Fingerprint_Cache));
+		INFO(NCCL_NET | NCCL_INIT, "Creating and initializing global fingerprint table & cache!\n\tTotal size (table + cache): %lu\n", pid, sizeof(Fingerprint_Cache));
 		ftruncate(fd, sizeof(Fingerprint_Cache));
 		global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
-		if (!global_fingerprint_cache){
-			fprintf(stderr, "Error: could not mmap fingerprint cache. Exiting...\n");
-			kill(0, SIGKILL);
-		}
 
 		// intialize the cache correctly
 		init_fingerprint_cache(global_fingerprint_cache);
@@ -54,6 +45,7 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 	for (int i = 0; i < MAX_FDS; i++){
 		active_fds[i] = 0;
 	}
+
 
 	return ncclSuccess;
 }
@@ -726,7 +718,7 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 		// we are saving the content refs that might be needed for reply without cache lookup again
 		ret = insert_fingerprint(global_fingerprint_cache, &(packaged_fingerprints[i]), cur_buffer, &(content_refs[i]));
 		if (ret){
-			fprintf(stderr, "CACHE IS FULL\n");
+			fprintf(stderr, "Error: inserting fingerprint failed\n");
 			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
 			return -1;
 		}
@@ -984,11 +976,10 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 void process_send_complete(Dedup_Send_Req * send_req){
 	// if this was a fingerprint send need to free resources and return 1
-	if ((send_req -> header.is_fingerprint) && (!send_req -> freed)){
+	if (send_req -> header.is_fingerprint){
 		free(send_req -> send_fingerprint_state.packaged_fingerprints);
 		free(send_req -> send_fingerprint_state.content_refs);
 		free(send_req -> send_fingerprint_state.missing_fingerprint_inds);
-		send_req -> freed = 1;
 	}
 	return;
 }
@@ -1123,7 +1114,6 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	send_req -> offset = 0;
 	send_req -> send_header_offset = 0;
 	send_req -> send_fingerprint_header_offset = 0;
-	send_req -> freed = 0;
 
 
 	if (size > FINGERPRINT_MSG_SIZE_THRESHOLD){
@@ -1258,7 +1248,7 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 
 	recv_req -> recv_fingerprint_state.packaged_fingerprints = malloc(recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes);
 	if (!recv_req -> recv_fingerprint_state.packaged_fingerprints){
-		fprintf(stderr, "malloc() for recving packaged fingerprints\n\tSize: %lu", recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes);
+		perror("malloc() for recving packaged fingerprints");
 		return -1;
 	}
 
@@ -1549,7 +1539,7 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 		// insert the content into cache
 		ret = insert_fingerprint(global_fingerprint_cache, &(packaged_fingerprints[missing_fingerprint_inds[i]]), missing_fingerprint_slots[i], &new_entry);
 		if (ret){
-			fprintf(stderr, "CACHE IS FULL! Not inserting anymore...\n");
+			fprintf(stderr, "Error: inserting fingerprint failed\n");
 			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
 			return -1;
 		}
@@ -1565,11 +1555,10 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 
 void process_recv_complete(Dedup_Recv_Req * recv_req){
 
-	if ((recv_req -> header.is_fingerprint) && (!recv_req -> freed)){
+	if (recv_req -> header.is_fingerprint){
 		free(recv_req -> recv_fingerprint_state.packaged_fingerprints);
 		free(recv_req -> recv_fingerprint_state.missing_fingerprint_slots);
 		free(recv_req -> recv_fingerprint_state.missing_fingerprint_inds);
-		recv_req -> freed = 1;
 	}
 	return;
 }
@@ -1701,7 +1690,6 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	recv_req -> app_filled_size = 0;
 	recv_req -> recv_header_offset = 0;
 	recv_req -> recv_fingerprint_header_offset = 0;
-	recv_req -> freed = 0;
 
 	recv_req -> stage = RECV_HEADER;
 
@@ -1754,7 +1742,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		if (is_complete == -1){
 			//return ncclSystemError;
 			fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
-			exit(1);
+			kill(0, SIGKILL);
 		}
 
 		sockfd = ((Dedup_Send_Req *) (req -> req)) -> sockfd;
@@ -1768,7 +1756,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		if (is_complete == -1){
 			//return ncclSystemError;
 			fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
-			exit(1);
+			kill(0, SIGKILL);
 		}
 
 		sockfd = ((Dedup_Recv_Req *) (req -> req)) -> sockfd;
@@ -1838,3 +1826,10 @@ ncclResult_t netDedup_closeRecv(void * recvComm) {
 
 	return ncclSuccess;
 }
+
+
+
+
+
+
+
