@@ -687,6 +687,9 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	for (uint64_t i = 0; i < num_fingerprints; i++){
 		// takes care of duplicates
 		// we are saving the content refs that might be needed for reply without cache lookup again
+
+		INFO(NCCL_NET | NCCL_INIT, "Inserting fingerprint #%llu into cache with size: %llu...\n", i, packaged_fingerprints[i].content_size);
+
 		ret = insert_fingerprint(net_dedup_state.global_fingerprint_cache, &(packaged_fingerprints[i]), cur_buffer, &(content_refs[i]));
 		if (ret){
 			fprintf(stderr, "Error: inserting fingerprint failed\n");
@@ -1335,7 +1338,7 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Finished populating from net cache!\n");
 
-	INFO(NCCL_NET | NCCL_INIT, "Capture stats:\n\tTotal Fingerprints: %llu\n\tFound Fingerprints: %llu\n\nRedundant Ratio: %llu / %llu\n\tRedundant Percentage: %.2f%%\n\n", num_fingerprints, num_missing_fingerprints, redudant_bytes, total_bytes, redudant_ratio);
+	INFO(NCCL_NET | NCCL_INIT, "Capture stats:\n\tTotal Fingerprints: %llu\n\tMissing Fingerprints: %llu\n\nRedundant Ratio: %llu / %llu\n\tRedundant Percentage: %.2f%%\n\n", num_fingerprints, num_missing_fingerprints, redudant_bytes, total_bytes, redudant_ratio);
 
 	return 1;
 }
