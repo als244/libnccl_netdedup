@@ -814,6 +814,43 @@ int process_recv_missing_fingerprint_header(Dedup_Send_Req * send_req){
 
 }
 
+int process_recv_missing_fingerprints(Dedup_Send_Req * send_req){
+
+	int sockfd = send_req -> sockfd;
+
+	uint64_t num_missing_fingerprints = send_req -> send_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints;
+
+	uint64_t total_size = num_missing_fingerprints * sizeof(uint64_t);
+
+	uint64_t recv_missing_fingerprint_inds_offset = send_req -> send_fingerprint_state.recv_missing_fingerprint_inds_offset;
+
+	uint64_t * missing_fingerprint_inds = send_req -> send_fingerprint_state.missing_fingerprint_inds;
+	void * cur_missing_fingerprints = ((void *) missing_fingerprint_inds) + recv_missing_fingerprint_inds_offset;
+	
+
+	uint64_t remain_size = total_size - recv_missing_fingerprint_inds_offset;
+
+
+
+	ssize_t recv_bytes = recv(sockfd, cur_missing_fingerprints, remain_size, 0);
+
+	if (recv_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("recv() during recv missing fingerprints");
+		return -1;
+	}
+
+	if (recv_bytes < remain_size){
+		send_req -> send_fingerprint_state.recv_missing_fingerprint_inds_offset += recv_bytes;
+		return 0;
+	}
+
+	// otherwise we have received all the missing fingerprint inds
+	return 1;
+}
+
 int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	INFO(NCCL_NET | NCCL_INIT, "In send missing content\n");
@@ -945,8 +982,14 @@ int process_send(Dedup_Send_Req * send_req){
 						send_req -> stage = SEND_COMPLETE;
 					}
 					else{
-						send_req -> stage = SEND_MISSING_CONTENT;
+						send_req -> stage = RECV_MISSING_FINGERPRINTS;
 					}
+				}
+				break;
+			case RECV_MISSING_FINGERPRINTS:
+				to_continue = process_recv_missing_fingerprints(send_req);
+				if (to_continue == 1){
+					send_req -> stage = SEND_MISSING_CONTENT;
 				}
 				break;
 			case SEND_MISSING_CONTENT:
@@ -1274,6 +1317,40 @@ int process_send_missing_fingerprint_header(Dedup_Recv_Req * recv_req){
 }
 
 
+int process_send_missing_fingerprints(Dedup_Recv_Req * recv_req){
+
+	int sockfd = recv_req -> sockfd;
+
+	uint64_t num_missing_fingerprints = recv_req -> recv_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints;
+
+	uint64_t total_size = num_missing_fingerprints * sizeof(uint64_t);
+
+	uint64_t prev_sent = recv_req -> recv_fingerprint_state.send_missing_fingerprint_inds_offset;
+
+	uint64_t * missing_fingerprint_inds = recv_req -> recv_fingerprint_state.missing_fingerprint_inds;
+	void * cur_missing_fingerprint_inds = ((void *) missing_fingerprint_inds) + prev_sent;
+
+	uint64_t remain_size = total_size - prev_sent;
+
+	ssize_t sent_bytes = send(sockfd, cur_missing_fingerprint_inds, remain_size, 0);
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("send() during missing fingerprints");
+		return -1;
+	}
+
+	if (sent_bytes < remain_size){
+		recv_req -> recv_fingerprint_state.send_missing_fingerprint_inds_offset += sent_bytes;
+		return 0;
+	}
+
+	// otherwise we have finished sending
+	return 1;
+}
+
+
 int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 
 	int sockfd = recv_req -> sockfd;
@@ -1408,8 +1485,14 @@ int process_recv(Dedup_Recv_Req * recv_req){
 						recv_req -> stage = RECV_COMPLETE;
 					}
 					else{
-						recv_req -> stage = RECV_MISSING_CONTENT;
+						recv_req -> stage = SEND_MISSING_FINGERPRINTS;
 					}
+				}
+				break;
+			case SEND_MISSING_FINGERPRINTS:
+				to_continue = process_send_missing_fingerprints(recv_req);
+				if (to_continue == 1){
+					recv_req -> stage = RECV_MISSING_CONTENT;
 				}
 				break;
 			case RECV_MISSING_CONTENT:
