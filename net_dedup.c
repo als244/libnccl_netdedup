@@ -677,6 +677,12 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	return 1;
 }
 
+int my_breakpoint_func(uint64_t num_fingerprints){
+
+	return num_fingerprints >> 60;
+
+}
+
 int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 
 	INFO(NCCL_NET | NCCL_INIT, "In insert outbound fingerprints\n");
@@ -704,6 +710,11 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 	INFO(NCCL_NET | NCCL_INIT, "Inserting fingerprints into cache...\n");
 
 	int ret;
+
+	if (num_fingerprints == 5){
+		int val = my_breakpoint_func(num_fingerprints);
+		printf("Dummy val: %d\n", val);
+	}
 
 	void * data = send_req -> data;
 	void * cur_buffer = data;
