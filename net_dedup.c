@@ -630,10 +630,13 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 	uint64_t num_fingerprints;
 	uint8_t * raw_fingerprint_buffer = malloc(max_fingerprints * FINGERPRINT_NUM_BYTES);
 	uint64_t * boundaries = malloc(max_fingerprints * sizeof(uint64_t));
+
+	INFO(NCCL_NET | NCCL_INIT, "Computing fingerprints\n\tSize: %llu\n", n);
+
 	do_fingerprinting((uint8_t *) data, n, &num_fingerprints, raw_fingerprint_buffer, boundaries,
 		settings -> rabin_p, settings -> rabin_m_bits, settings -> rabin_table, settings -> window_bytes, settings -> lower_bits, settings -> min_chunk_size_bytes, settings -> max_chunk_size_bytes, settings -> magic_val);
 
-	
+	INFO(NCCL_NET | NCCL_INIT, "Finished computing fingerprints. Now packaging them...\n");
 
 	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
 
@@ -669,6 +672,8 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 		return -1;
 	}
 
+	INFO(NCCL_NET | NCCL_INIT, "Inserting fingerprints into cache...\n");
+
 	int ret;
 	void * cur_buffer = data;
 	for (uint64_t i = 0; i < num_fingerprints; i++){
@@ -681,6 +686,8 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 		}
 		cur_buffer += packaged_fingerprints[i].content_size;
 	}
+
+	INFO(NCCL_NET | NCCL_INIT, "Finished inserting fingerprints into cache...\n");
 
 	// save the content refs as part of request
 	send_state -> content_refs = content_refs;
