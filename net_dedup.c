@@ -985,10 +985,11 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 void process_send_complete(Dedup_Send_Req * send_req){
 	// if this was a fingerprint send need to free resources and return 1
-	if (send_req -> header.is_fingerprint){
+	if ((send_req -> header.is_fingerprint) && (!send_req -> freed)){
 		free(send_req -> send_fingerprint_state.packaged_fingerprints);
 		free(send_req -> send_fingerprint_state.content_refs);
 		free(send_req -> send_fingerprint_state.missing_fingerprint_inds);
+		send_req -> freed = 1;
 	}
 	return;
 }
@@ -1123,6 +1124,7 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	send_req -> offset = 0;
 	send_req -> send_header_offset = 0;
 	send_req -> send_fingerprint_header_offset = 0;
+	send_req -> freed = 0;
 
 
 	if (size > FINGERPRINT_MSG_SIZE_THRESHOLD){
@@ -1569,10 +1571,11 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 
 void process_recv_complete(Dedup_Recv_Req * recv_req){
 
-	if (recv_req -> header.is_fingerprint){
+	if ((recv_req -> header.is_fingerprint) && (!recv_req -> freed)){
 		free(recv_req -> recv_fingerprint_state.packaged_fingerprints);
 		free(recv_req -> recv_fingerprint_state.missing_fingerprint_slots);
 		free(recv_req -> recv_fingerprint_state.missing_fingerprint_inds);
+		recv_req -> freed = 1;
 	}
 	return;
 }
@@ -1704,6 +1707,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	recv_req -> app_filled_size = 0;
 	recv_req -> recv_header_offset = 0;
 	recv_req -> recv_fingerprint_header_offset = 0;
+	recv_req -> freed = 1;
 
 	recv_req -> stage = RECV_HEADER;
 
