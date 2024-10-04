@@ -1499,17 +1499,22 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 	}
 
 
-	if (is_complete){
+	if (is_complete == 1){
+
 		*done = 1;
 
-		INFO(NCCL_NET, "Test() completed!\n");
+		INFO(NCCL_NET | NCCL_INIT, "Test() completed!\n");
 
-		// the recv will get freed during from irecvConsumed()
-		if (type == SEND_REQ){
-			*size = (((Dedup_Send_Req *) (req -> req)) -> header).content_size;
-		}
-		else{
-			*size = (((Dedup_Recv_Req *) (req -> req)) -> header).content_size;
+		if (size != NULL){
+			// the recv will get freed during from irecvConsumed()
+			if (type == SEND_REQ){
+				INFO(NCCL_NET | NCCL_INIT, "Getting size...\n");
+				*size = (int) ((((Dedup_Send_Req *) (req -> req)) -> header).content_size);
+				INFO(NCCL_NET | NCCL_INIT, "Reutrning size as: %d\n", *size);
+			}
+			else{
+				*size = (((Dedup_Recv_Req *) (req -> req)) -> header).content_size;
+			}
 		}
 
 		// already freed the inner allocations (for fingerprint sends), but still need to free the container
