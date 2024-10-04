@@ -92,6 +92,9 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 
 	// special case of immediate magic match
 	magic_check = cur_rabin & magic_mask;
+
+	// we will start at min chunk size bytes if there wasn't an initial match
+	// and num bytes is long enough
 	uint64_t i = min_chunk_size_bytes;
 	if ((num_bytes < min_chunk_size_bytes) || (magic_check == magic_val)){
 		is_done = handle_magic_match(data_bytes, 0, min_chunk_size_bytes, remain_bytes, min_chunk_size_bytes, num_fingerprints, fingerprints, boundaries, rabin_p, rabin_mask, window_bytes, window);
@@ -102,6 +105,11 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 		num_fingerprints += 1;
 		remain_bytes -= min_chunk_size_bytes;
 		cur_start_ind = min_chunk_size_bytes;
+		// ensure that we advance where we compute the 
+		// the next segment
+		// (init rabin table has been populaed with the bytes
+		// now at 2 * min_chunk_size bytes - window_bytes)
+		// would have returned if there wasn't enough for 2 min sin chunk sized chunks
 		i += (min_chunk_size_bytes - window_bytes);
 	}
 
