@@ -482,6 +482,21 @@ ncclResult_t netDedup_accept_v7(void * listenComm, void ** recvComm, ncclNetDevi
 }
 
 
+ncclResult_t netDedup_closeListen(void * listenComm) {
+
+	Dedup_Listen_Comm * dedup_listen_comm = (Dedup_Listen_Comm *) listenComm;
+	int listenFd = dedup_listen_comm -> listenFd;
+
+	INFO(NCCL_NET | NCCL_INIT, "Called closeListen() for listenFd: %d\n", listenFd);
+
+	close(listenFd);
+
+	free(dedup_listen_comm);
+
+	return ncclSuccess;
+}
+
+
 // Following implementation from https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
 //	regarding what errors to return
 
@@ -525,6 +540,14 @@ ncclResult_t netDedup_deregMr(void * comm, void * mhandle) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called deregMr()\n");
 	return ncclSuccess;
+}
+
+
+ncclResult_t netDedup_getDeviceMr(void * comm, void * mhandle, void ** dptr_mhandle) {
+
+	INFO(NCCL_NET, "Called getDeviceMr()\n");
+
+	return ncclInternalError;
 }
 
 ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, void ** mhandles, void ** request) {
@@ -916,7 +939,7 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	Dedup_Send_Comm * dedup_send_comm = (Dedup_Send_Comm *) sendComm;
 	int dev_num = dedup_send_comm -> dev_num;
 
-	INFO(NCCL_NET | NCCL_INIT, "Calling isend() on dev #%d!\n\tSize: %d", dev_num, size);
+	INFO(NCCL_NET, "Calling isend() on dev #%d!\n\tSize: %d", dev_num, size);
 
 	Dedup_Req * req = malloc(sizeof(Dedup_Req));
 	if (!req){
@@ -1365,7 +1388,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
 	int dev_num = dedup_recv_comm -> dev_num;
 
-	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
+	INFO(NCCL_NET, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
 
 	Dedup_Req * req = malloc(sizeof(Dedup_Req));
 	if (!req){
@@ -1416,6 +1439,8 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 
 ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 
+
+
 	Dedup_Req * req = (Dedup_Req *) request;
 
 	ReqType type = req -> type;
@@ -1423,14 +1448,20 @@ ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 	int is_complete;
 
 	if (type == SEND_REQ){
-		is_complete = process_send((Dedup_Send_Req *) req -> req);
+
+		INFO(NCCL_NET, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
+
+		is_complete = process_send((Dedup_Send_Req *) (req -> req));
 		if (is_complete == -1){
 			return ncclSystemError;
 		}
 	}
 
 	if (type == RECV_REQ){
-		is_complete = process_recv((Dedup_Recv_Req *) req -> req);
+
+		INFO(NCCL_NET, "Called test() for recv() with fd: %d\n", ((Dedup_Recv_Req *) (req -> req)) -> sockfd);
+
+		is_complete = process_recv((Dedup_Recv_Req *) (req -> req));
 		if (is_complete == -1){
 			return ncclSystemError;
 		}
@@ -1438,13 +1469,35 @@ ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 
 
 	if (is_complete){
-		// already freed the inner allocations (for fingerprint sends), but still need to free the container
-		free(req -> req);
-		free(req);
 		*done = 1;
+
+		INFO(NCCL_NET, "Test() completed!\n");
+
+		// the recv will get freed during from irecvConsumed()
+		if (type == SEND_REQ){
+			// already freed the inner allocations (for fingerprint sends), but still need to free the container
+			free(req -> req);
+			free(req);
+		}
 	}
 
 	// otherwise is_complete should be zero
+	return ncclSuccess;
+}
+
+
+ncclResult_t netDedup_irecvConsumed(void * recvComm, int n, void * request) {
+
+	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
+
+	INFO(NCCL_NET, "Called irecvConsumed() for fd: %d\n", dedup_recv_comm -> fd);
+
+	Dedup_Req * req = (Dedup_Req *) request;
+
+	// now can free the recv request and dedup_req
+	free(req -> req);
+	free(req);
+
 	return ncclSuccess;
 }
 
@@ -1453,7 +1506,7 @@ ncclResult_t netDedup_closeSend(void * sendComm) {
 
 	Dedup_Send_Comm * dedup_send_comm = (Dedup_Send_Comm *) sendComm;
 
-	INFO(NCCL_NET | NCCL_INIT, "Called closeSend() for fd: %d\n", dedup_send_comm -> fd);
+	INFO(NCCL_NET, "Called closeSend() for fd: %d\n", dedup_send_comm -> fd);
 
 	close(dedup_send_comm -> fd);
 
@@ -1466,7 +1519,7 @@ ncclResult_t netDedup_closeRecv(void * recvComm) {
 
 	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
 
-	INFO(NCCL_NET | NCCL_INIT, "Called closeRecv() for fd: %d\n", dedup_recv_comm -> fd);
+	INFO(NCCL_NET, "Called closeRecv() for fd: %d\n", dedup_recv_comm -> fd);
 
 	close(dedup_recv_comm -> fd);
 
@@ -1476,34 +1529,8 @@ ncclResult_t netDedup_closeRecv(void * recvComm) {
 }
 
 
-ncclResult_t netDedup_closeListen(void * listenComm) {
-
-	
-
-	Dedup_Listen_Comm * dedup_listen_comm = (Dedup_Listen_Comm *) listenComm;
-	int listenFd = dedup_listen_comm -> listenFd;
-
-	INFO(NCCL_NET | NCCL_INIT, "Called closeListen() for listenFd: %d\n", listenFd);
-
-	close(listenFd);
-
-	free(dedup_listen_comm);
-
-	return ncclSuccess;
-}
 
 
-ncclResult_t netDedup_getDeviceMr(void * comm, void * mhandle, void ** dptr_mhandle) {
-
-	INFO(NCCL_NET | NCCL_INIT, "Called getDeviceMr()\n");
-
-	return ncclInternalError;
-}
 
 
-ncclResult_t netDedup_irecvConsumed(void * recvComm, int n, void * request) {
 
-	INFO(NCCL_NET | NCCL_INIT, "Called irecvConsumed()\n");
-
-	return ncclInternalError;
-}
