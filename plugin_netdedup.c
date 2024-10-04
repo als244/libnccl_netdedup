@@ -14,6 +14,8 @@ Net_Dedup_State net_dedup_state;
 
 ncclDebugLogger_t nccl_log_func;
 
+// Setting the same functions to null as in reference NCCL-Socket implementation:
+//  Ref: https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
 
 const ncclNet_v8_t ncclNetPlugin_v8 = {
   .name = PLUGIN_NAME,
