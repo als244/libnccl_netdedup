@@ -563,6 +563,8 @@ int process_send_header(Dedup_Send_Req * send_req){
 
 	int sockfd = send_req -> sockfd;
 
+	INFO(NCCL_NET | NCCL_INIT, "Sending header\n\tSockfd: %d\n", sockfd);
+
 	int prev_sent = send_req -> send_header_offset;
 	void * cur_header = &(send_req -> header) + prev_sent;
 	size_t remain_size = sizeof(Dedup_Header) - prev_sent;
@@ -588,7 +590,9 @@ int process_send_header(Dedup_Send_Req * send_req){
 
 int process_send_reg_data(Dedup_Send_Req * send_req) {
 
+
 	int sockfd = send_req -> sockfd;
+
 
 	void * data = send_req -> data;
 	uint64_t size = send_req -> size;
