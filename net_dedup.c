@@ -713,10 +713,14 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	send_state -> cur_reply_content_fingerprint_ind = 0;
 	send_state -> cur_reply_content_fingerprint_offset = 0;
 
+	INFO(NCCL_NET | NCCL_INIT, "Completed compute_fingerprints()\n");
+
 	return 1;
 }
 
 int process_send_fingerprint_header(Dedup_Send_Req * send_req){
+
+	INFO(NCCL_NET | NCCL_INIT, "In send fingerprint header()\n");
 
 	int sockfd = send_req -> sockfd;
 
@@ -744,6 +748,9 @@ int process_send_fingerprint_header(Dedup_Send_Req * send_req){
 }
 
 int process_send_packaged_fingerprints(Dedup_Send_Req * send_req){
+
+
+	INFO(NCCL_NET | NCCL_INIT, "In send packaged fingerprints\n");
 
 	int sockfd = send_req -> sockfd;
 
@@ -775,6 +782,8 @@ int process_send_packaged_fingerprints(Dedup_Send_Req * send_req){
 
 int process_recv_missing_fingerprint_header(Dedup_Send_Req * send_req){
 
+	INFO(NCCL_NET | NCCL_INIT, "In recv missing fingerprints header\n");
+
 	int sockfd = send_req -> sockfd;
 
 	int prev_recv = send_req -> send_fingerprint_state.missing_fingerprint_header_offset;
@@ -804,6 +813,8 @@ int process_recv_missing_fingerprint_header(Dedup_Send_Req * send_req){
 }
 
 int process_send_missing_content(Dedup_Send_Req * send_req){
+
+	INFO(NCCL_NET | NCCL_INIT, "In send missing content\n");
 
 	int sockfd = send_req -> sockfd;
 
