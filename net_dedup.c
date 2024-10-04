@@ -962,7 +962,6 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 		sent_bytes = send(sockfd, fingerprint_content, remain_bytes, 0);
 
 		if (sent_bytes == -1){
-			free(temp_buffer);
 			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
 				return 0;
 			}
@@ -973,7 +972,6 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 		if (sent_bytes < remain_bytes){
 			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind = i;
 			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = cur_offset + sent_bytes;
-			free(temp_buffer);
 			return 0;
 		}
 
