@@ -10,13 +10,19 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 	pid_t pid = getpid();
 	INFO(NCCL_NET | NCCL_INIT, "Initially loaded net dedup nccl plugin!\n", pid);
 
-	int num_net_devices = init_net_socket_devs(net_dedup_state.net_devices);
+	net_dedup_state = mmap(0, sizeof(Net_Dedup_State), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED, 0, 0);
+	if (!net_dedup_state){
+		fprintf(stderr, "Error: issue with allocating net dedup state\n");
+		return -1;
+	}
+
+	int num_net_devices = init_net_socket_devs(net_dedup_state -> net_devices);
 
 	if (num_net_devices == -1){
 		return ncclSystemError;
 	}
 
-	net_dedup_state.num_net_devices = num_net_devices;
+	net_dedup_state -> num_net_devices = num_net_devices;
 
 	// mmap shard cache into memory...
 	int fd = shm_open(FINGERPRINT_CACHE_PATH, O_RDWR | O_CREAT | O_EXCL, 0660);
@@ -28,19 +34,19 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 			fd = shm_open(FINGERPRINT_CACHE_PATH, O_RDWR, 0);
 		}
 		INFO(NCCL_NET | NCCL_INIT, "Found existing fingerprint cache in system, and mmapping it in to address space!\n", pid);
-		net_dedup_state.global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
+		net_dedup_state -> global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
 	}
 	// we just created it
 	else{
 		INFO(NCCL_NET | NCCL_INIT, "Creating and initializing global fingerprint table & cache!\n\tTotal size (table + cache): %lu\n", pid, sizeof(Fingerprint_Cache));
 		ftruncate(fd, sizeof(Fingerprint_Cache));
-		net_dedup_state.global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
+		net_dedup_state -> global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
 
 		// intialize the cache correctly
-		init_fingerprint_cache(net_dedup_state.global_fingerprint_cache);
+		init_fingerprint_cache(net_dedup_state -> global_fingerprint_cache);
 	}
 
-	net_dedup_state.logFunction = logFunction;
+	net_dedup_state -> logFunction = logFunction;
 
 	for (int i = 0; i < MAX_FDS; i++){
 		active_fds[i] = 0;
@@ -54,9 +60,9 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 // returns number of devices
 ncclResult_t netDedup_devices(int * ndev) {
 	
-	*ndev = net_dedup_state.num_net_devices;
+	*ndev = net_dedup_state -> num_net_devices;
 
-	INFO(NCCL_NET | NCCL_INIT, "Found %d devices\n", net_dedup_state.num_net_devices);
+	INFO(NCCL_NET | NCCL_INIT, "Found %d devices\n", net_dedup_state -> num_net_devices);
 
 	return ncclSuccess;
 
@@ -71,12 +77,12 @@ ncclResult_t netDedup_getProperties_v8(int dev, ncclNetProperties_v8_t * props) 
 
 	INFO(NCCL_NET | NCCL_INIT, "Called getProperties() for device #%d\n", dev);
 	
-	if (dev >= net_dedup_state.num_net_devices){
-		fprintf(stderr, "Error: calling get_properties on device %d, but only have %d net devices...\n", dev, net_dedup_state.num_net_devices);
+	if (dev >= net_dedup_state -> num_net_devices){
+		fprintf(stderr, "Error: calling get_properties on device %d, but only have %d net devices...\n", dev, net_dedup_state -> num_net_devices);
 		return ncclInvalidUsage;
 	}
 
-	Net_Socket_Dev q_dev = net_dedup_state.net_devices[dev];
+	Net_Socket_Dev q_dev = net_dedup_state -> net_devices[dev];
 
 	props -> name = q_dev.if_name;
 
@@ -121,12 +127,12 @@ ncclResult_t netDedup_getProperties_v7(int dev, ncclNetProperties_v7_t * props) 
 	
 	INFO(NCCL_NET | NCCL_INIT, "Called getProperties() for device #%d\n", dev);
 	
-	if (dev >= net_dedup_state.num_net_devices){
-		fprintf(stderr, "Error: calling get_properties on device %d, but only have %d net devices...\n", dev, net_dedup_state.num_net_devices);
+	if (dev >= net_dedup_state -> num_net_devices){
+		fprintf(stderr, "Error: calling get_properties on device %d, but only have %d net devices...\n", dev, net_dedup_state -> num_net_devices);
 		return ncclInvalidUsage;
 	}
 
-	Net_Socket_Dev q_dev = net_dedup_state.net_devices[dev];
+	Net_Socket_Dev q_dev = net_dedup_state -> net_devices[dev];
 
 	props -> name = q_dev.if_name;
 
@@ -168,7 +174,7 @@ ncclResult_t netDedup_listen(int dev, void * handle, void ** listenComm) {
 	INFO(NCCL_NET | NCCL_INIT, "Calling listen on dev #%d!\n", dev);
 
 	// 1.) Get address of this device
-	Net_Socket_Dev q_dev = net_dedup_state.net_devices[dev];
+	Net_Socket_Dev q_dev = net_dedup_state -> net_devices[dev];
 	struct sockaddr_in * saddr = &(q_dev.sa);
 
 	// 2.) Create listening socket
@@ -633,7 +639,7 @@ int process_send_reg_data(Dedup_Send_Req * send_req) {
 
 uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged_fingerprints){
 
-	Fingerprinting_Settings * settings = &((net_dedup_state.global_fingerprint_cache) -> fingerprinting_settings);
+	Fingerprinting_Settings * settings = &((net_dedup_state -> global_fingerprint_cache) -> fingerprinting_settings);
 	uint64_t max_fingerprints = (n / (settings -> min_chunk_size_bytes)) + 1;
 	uint64_t num_fingerprints;
 	uint8_t * raw_fingerprint_buffer = malloc(max_fingerprints * FINGERPRINT_NUM_BYTES);
@@ -687,7 +693,7 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	for (uint64_t i = 0; i < num_fingerprints; i++){
 		// takes care of duplicates
 		// we are saving the content refs that might be needed for reply without cache lookup again
-		ret = insert_fingerprint(net_dedup_state.global_fingerprint_cache, &(packaged_fingerprints[i]), cur_buffer, &(content_refs[i]));
+		ret = insert_fingerprint(net_dedup_state -> global_fingerprint_cache, &(packaged_fingerprints[i]), cur_buffer, &(content_refs[i]));
 		if (ret){
 			fprintf(stderr, "Error: inserting fingerprint failed\n");
 			return -1;
@@ -899,7 +905,7 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 		INFO(NCCL_NET | NCCL_INIT, "Attempting to send missing content for:\n\tMissing fingerprint #%llu\n\tIndex: %llu\n", i, reply_ind);
 
-		copy_fingerprint_content(temp_buffer, net_dedup_state.global_fingerprint_cache, &(content_refs[reply_ind]));
+		copy_fingerprint_content(temp_buffer, net_dedup_state -> global_fingerprint_cache, &(content_refs[reply_ind]));
 
 		// in the case of first fingerprint in this loop in case we couldn't send the whole thing the last time
 		// otherwise cur_offset will be set to 0
@@ -1299,7 +1305,7 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 		// Blocking call to the Fingerprint hash table part of 
 		//	system-wide shared memory global_fingerprint_cache (which == /dev/shm/libnetdedup)
 		total_bytes += packaged_fingerprints[i].content_size;
-		ret = lookup_fingerprint(net_dedup_state.global_fingerprint_cache, packaged_fingerprints[i].fingerprint, &entry);
+		ret = lookup_fingerprint(net_dedup_state -> global_fingerprint_cache, packaged_fingerprints[i].fingerprint, &entry);
 		if (!ret){
 			missing_fingerprint_inds[num_missing_fingerprints] = i;
 			missing_fingerprint_slots[num_missing_fingerprints] = (void *) cur_app_buffer;
@@ -1310,7 +1316,7 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 			if (TO_PRINT_INTERCEPT_INFO && TO_PRINT_FINGERPRINT_INFO){
 				printf("Found fingerprint ind #%lu!\n", i);
 			}
-			copy_fingerprint_content((void *) cur_app_buffer, net_dedup_state.global_fingerprint_cache, &entry);
+			copy_fingerprint_content((void *) cur_app_buffer, net_dedup_state -> global_fingerprint_cache, &entry);
 			recv_req -> app_filled_size += packaged_fingerprints[i].content_size;
 		}
 		cur_app_buffer += packaged_fingerprints[i].content_size;
@@ -1318,12 +1324,12 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
 
 	// maintain global statistics
-	pthread_mutex_lock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
-	net_dedup_state.global_fingerprint_cache -> stats.total_recv_bytes += total_bytes;
-	net_dedup_state.global_fingerprint_cache -> stats.populated_from_cache_bytes += (total_bytes - total_missing_bytes);
-	net_dedup_state.global_fingerprint_cache -> stats.total_fingerprints += num_fingerprints;
-	net_dedup_state.global_fingerprint_cache -> stats.total_found_fingerprints += (num_fingerprints - num_missing_fingerprints);
-	pthread_mutex_unlock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
+	pthread_mutex_lock(&(net_dedup_state -> global_fingerprint_cache -> cache_lock));
+	net_dedup_state -> global_fingerprint_cache -> stats.total_recv_bytes += total_bytes;
+	net_dedup_state -> global_fingerprint_cache -> stats.populated_from_cache_bytes += (total_bytes - total_missing_bytes);
+	net_dedup_state -> global_fingerprint_cache -> stats.total_fingerprints += num_fingerprints;
+	net_dedup_state -> global_fingerprint_cache -> stats.total_found_fingerprints += (num_fingerprints - num_missing_fingerprints);
+	pthread_mutex_unlock(&(net_dedup_state -> global_fingerprint_cache -> cache_lock));
 
 	uint64_t redudant_bytes = total_bytes - total_missing_bytes;
 	double redudant_ratio = 100 * ((double) redudant_bytes / (double) total_bytes);
@@ -1468,7 +1474,7 @@ int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 		// assert recv_req -> app_filled_size = packaged_fingerprints[missing_fingerprint_inds[i]].content_size
 
 		// insert the content into cache
-		ret = insert_fingerprint(net_dedup_state.global_fingerprint_cache, &(packaged_fingerprints[missing_fingerprint_inds[i]]), missing_fingerprint_slots[i], &new_entry);
+		ret = insert_fingerprint(net_dedup_state -> global_fingerprint_cache, &(packaged_fingerprints[missing_fingerprint_inds[i]]), missing_fingerprint_slots[i], &new_entry);
 		if (ret){
 			fprintf(stderr, "Error: inserting fingerprint failed\n");
 			return -1;

@@ -165,7 +165,7 @@ typedef struct dedup_req {
 } Dedup_Req;
 
 
-extern Net_Dedup_State net_dedup_state;
+extern Net_Dedup_State * net_dedup_state;
 extern ncclDebugLogger_t nccl_log_func;
 extern int active_fds[MAX_FDS];
 
