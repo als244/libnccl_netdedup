@@ -595,6 +595,7 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 
 	// 3a.) sending fingprints
 	send_state -> send_fingerprint_offset = 0;
+	send_state -> packaged_fingerprints_size_bytes = num_fingerprints * sizeof(Fingerprint);
 
 	// 3b.) receiving missing fingerprints
 	send_state -> missing_fingerprint_header.num_missing_fingerprints = 0;
@@ -635,6 +636,7 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 		return ncclSystemError;
 	}
 
+	send_req -> sockfd = dedup_send_comm -> fd;
 	send_req -> size = size;
 	send_req -> data = data;
 	send_req -> offset = 0;
@@ -847,6 +849,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 		return ncclSystemError;
 	}
 
+	recv_req -> sockfd = dedup_recv_comm -> fd;
 	recv_req -> size = sizes[0];
 	recv_req -> data = data[0];
 	recv_req -> offset = 0;
@@ -867,7 +870,151 @@ ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, 
 }
 
 
-int process_send_header()
+int process_send_header(Dedup_Send_Req * send_req){
+
+	int sockfd = send_req -> sockfd;
+
+	sent_bytes = send(sockfd, &(send_req -> is_fingerprint), 1, 0);
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("send() during header send");
+		return -1;
+	}
+
+	// assert sent_byte == 1
+
+	// only 1 byte so if wasnt -1, then we know we sent the header
+	return 1;
+
+}
+
+int process_send_reg_data(Dedup_Send_Req * send_req) {
+
+	int sockfd = send_req -> sockfd;
+
+	void * data = send_req -> data;
+	uint64_t size = send_req -> size;
+	uint64_t offset = send_req -> offset;
+
+	void * cur_data = data + offset;
+	uint64_t remain_bytes = size - offset;
+
+	ssize_t sent_bytes = send(sockfd, cur_data, remain_bytes, 0);
+
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("send() during reg data send");
+		return -1;
+	}
+
+	send_req -> offset += sent_bytes;
+
+	// if we finished sending the whole thing
+	if (send_req -> offset == size){
+		return 1;
+	}
+
+	// if there are some bytes remaining don't indicate to continue to next stage
+	return 0;
+
+}
+
+int process_send_fingerprint_header(Dedup_Send_Req * send_req){
+
+	int sockfd = send_req -> sockfd;
+
+	int prev_sent = send_req -> send_fingerprint_header_offset;
+	void * cur_header = &(send_req -> fingerprint_header) + prev_sent;
+	size_t remain_size = sizeof(Fingerprint_Header) - prev_sent;
+
+	ssize_t sent_bytes = send(sockfd, cur_header, remain_size, 0);
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("send() during fingerprint header send");
+		return -1;
+	}	
+
+	// if we didn't finish sending the header
+	if (sent_bytes < remain_size){
+		send_req -> send_fingerprint_header_offset += sent_bytes;
+		return 0;
+	}
+
+	// otherwise we sent the entire header, so we can continue
+	return 1;
+}
+
+int process_send_packaged_fingerprints(Dedup_Send_Req * send_req){
+
+	int sockfd = send_req -> sockfd;
+
+	int prev_sent = send_req -> send_fingerprint_state.send_fingerprint_offset;
+
+	void * cur_packaged_fingerprints = ((void *) send_req -> send_fingerprint_state.packaged_fingerprints) + prev_sent;
+
+	uint64_t packaged_fingerprints_size_bytes = send_req -> send_fingerprint_state.packaged_fingerprints_size_bytes;
+
+	size_t remain_size = packaged_fingerprints_size_bytes - prev_sent;
+
+	ssize_t sent_bytes = send(sockfd, cur_packaged_fingerprints, remain_size, 0);
+	if (sent_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("send() during packaged fingerprints");
+		return -1;
+	}
+
+	if (sent_bytes < remain_size){
+		send_req -> send_fingerprint_state.send_fingerprint_offset += sent_bytes;
+		return 0;
+	}
+
+	// otherwise we sent the whole thing so we can continue
+	return 1;
+}
+
+int process_recv_missing_fingerprint_header(Dedup_Send_Req * send_req){
+
+	int sockfd = send_req -> sockfd;
+
+	int prev_recv = send_req -> send_fingerprint_state.missing_fingerprint_header_offset;
+
+	void * cur_header = ((void *) &(send_req -> send_fingerprint_state.missing_fingerprint_header)) + prev_recv;
+
+	size_t remain_size = sizeof(Missing_Fingerprint_Header) - prev_recv;
+
+	recv_bytes = recv(sockfd, cur_header, remain_size, 0);
+
+	if (recv_bytes == -1){
+		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
+			return 0;
+		}
+		perror("recv() during recv missing fingerprints header");
+		return -1;
+	}
+
+
+	if (recv_bytes < remain_size){
+		send_req -> send_fingerprint_state.missing_fingerprint_header_offset += recv_bytes;
+		return 0;
+	}
+
+	return 1;
+
+}
+
+int process_send_missing_content(Dedup_Send_Req * send_req){
+
+
+
+}
 
 void process_send_complete(Dedup_Send_Req * send_req){
 	// if this was a fingerprint send need to free resources and return 1
@@ -882,13 +1029,6 @@ void process_send_complete(Dedup_Send_Req * send_req){
 
 
 int process_send(Dedup_Send_Req * send_req){
-
-	SendReqStage cur_stage = send_req -> stage;
-
-	if (cur_stage == SEND_COMPLETE){
-
-		
-	}
 
 	int to_continue = 1;
 	while (to_continue){

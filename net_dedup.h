@@ -101,6 +101,7 @@ typedef struct fingerprint_recv_state {
 typedef struct fingerprint_send_state {
 	Fingerprint * packaged_fingerprints;
 	Fingerprint_Entry * content_refs;
+	uint64_t packaged_fingerprints_size_bytes;
 	uint64_t send_fingerprint_offset;
 	// receved from other side
 	Missing_Fingerprint_Header missing_fingerprint_header;
@@ -114,6 +115,7 @@ typedef struct fingerprint_send_state {
 } Fingerprint_Send_State;
 
 typedef struct dedup_recv_req {
+	int sockfd;
 	RecvReqStage stage;
 	char is_fingerprint;
 	Fingerprint_Header fingerprint_header;
@@ -128,6 +130,7 @@ typedef struct dedup_recv_req {
 
 
 typedef struct dedup_send_req {
+	int sockfd;
 	SendReqStage stage;
 	char is_fingerprint;
 	Fingerprint_Header fingerprint_header;
