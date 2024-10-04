@@ -864,10 +864,13 @@ void process_send_complete(Dedup_Send_Req * send_req){
 
 int process_send(Dedup_Send_Req * send_req){
 
+	INFO(NCCL_NET | NCCL_INIT, "In process_send()\n");
+
 	int to_continue = 1;
 	while (to_continue){
 		switch (send_req -> stage){
 			case SEND_HEADER:
+				INFO(NCCL_NET | NCCL_INIT, "Calling send_header()\n");
 				to_continue = process_send_header(send_req);
 				if (to_continue == 1){
 					if (send_req -> header.is_fingerprint){
@@ -879,12 +882,14 @@ int process_send(Dedup_Send_Req * send_req){
 				}
 				break;
 			case SEND_REG_DATA:
+				INFO(NCCL_NET | NCCL_INIT, "Calling send_reg_data()\n");
 				to_continue = process_send_reg_data(send_req);
 				if (to_continue == 1){
 					send_req -> stage = SEND_COMPLETE;
 				}
 				break;
 			case COMPUTE_FINGERPRINTS:
+				INFO(NCCL_NET | NCCL_INIT, "Calling compute_fingerprints()\n");
 				to_continue = process_compute_fingerprints(send_req -> data, send_req -> size, &(send_req -> fingerprint_header), &(send_req -> send_fingerprint_state));
 				if (to_continue == 1){
 					send_req -> stage = SEND_FINGERPRINT_HEADER;
@@ -922,6 +927,7 @@ int process_send(Dedup_Send_Req * send_req){
 				}
 				break;
 			case SEND_COMPLETE:
+				INFO(NCCL_NET | NCCL_INIT, "Calling send_complete()\n");
 				process_send_complete(send_req);
 				return 1;
 			default:
@@ -1478,6 +1484,8 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		if (is_complete == -1){
 			return ncclSystemError;
 		}
+
+		INFO(NCCL_NET | NCCL_INIT, "Called process_send()\n\tIs Complete: %d\n", is_complete);
 	}
 
 	if (type == RECV_REQ){
