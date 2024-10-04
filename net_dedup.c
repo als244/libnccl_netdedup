@@ -597,6 +597,10 @@ int process_send_reg_data(Dedup_Send_Req * send_req) {
 	void * cur_data = data + offset;
 	uint64_t remain_bytes = size - offset;
 
+	if (size == 0){
+		return 1;
+	}
+
 	ssize_t sent_bytes = send(sockfd, cur_data, remain_bytes, 0);
 
 	if (sent_bytes == -1){
@@ -984,11 +988,6 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 
 	send_req -> stage = SEND_HEADER;
 
-
-	if (size == 0){
-		send_req -> stage = SEND_COMPLETE;
-	}
-
 	// process as much as we can
 	// send_req state will be updated for as far as we get
 	// it will continue to progress every time "test" is called
@@ -1051,6 +1050,10 @@ int process_recv_reg_data(Dedup_Recv_Req * recv_req) {
 
 	void * cur_data = data + offset;
 	uint64_t remain_bytes = content_size - offset;
+
+	if (remain_bytes == 0){
+		return 1;
+	}
 
 	ssize_t recv_bytes = recv(sockfd, cur_data, remain_bytes, 0);
 
