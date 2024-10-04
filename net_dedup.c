@@ -1742,7 +1742,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		if (is_complete == -1){
 			//return ncclSystemError;
 			fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
-			exit(1);
+			kill(0, SIGKILL);
 		}
 
 		sockfd = ((Dedup_Send_Req *) (req -> req)) -> sockfd;
@@ -1756,7 +1756,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		if (is_complete == -1){
 			//return ncclSystemError;
 			fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
-			exit(1);
+			kill(0, SIGKILL);
 		}
 
 		sockfd = ((Dedup_Recv_Req *) (req -> req)) -> sockfd;
