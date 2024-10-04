@@ -1624,8 +1624,6 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 	if (type == RECV_REQ){
 
-		INFO(NCCL_NET | NCCL_INIT, "Called test() for recv() with fd: %d\n", ((Dedup_Recv_Req *) (req -> req)) -> sockfd);
-
 		is_complete = process_recv((Dedup_Recv_Req *) (req -> req));
 		if (is_complete == -1){
 			return ncclSystemError;
