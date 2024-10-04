@@ -170,7 +170,7 @@ typedef struct dedup_req {
 extern Net_Dedup_State net_dedup_state;
 extern Fingerprint_Cache * global_fingerprint_cache;
 extern ncclDebugLogger_t nccl_log_func;
-extern to_skip_cache_inserts;
+extern int to_skip_cache_inserts;
 extern int active_fds[MAX_FDS];
 
 

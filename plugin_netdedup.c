@@ -13,6 +13,8 @@
 Fingerprint_Cache * global_fingerprint_cache;
 Net_Dedup_State net_dedup_state;
 
+int to_skip_cache_inserts;
+
 int active_fds[MAX_FDS];
 
 ncclDebugLogger_t nccl_log_func;
