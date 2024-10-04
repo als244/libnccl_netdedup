@@ -110,7 +110,7 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 		// (init rabin table has been populaed with the bytes
 		// now at 2 * min_chunk_size bytes - window_bytes)
 		// would have returned if there wasn't enough for 2 min sin chunk sized chunks
-		i += (min_chunk_size_bytes - window_bytes);
+		i += min_chunk_size_bytes;
 	}
 
 
@@ -136,7 +136,7 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 			num_fingerprints += 1;
 			remain_bytes -= ((i - cur_start_ind) + 1);
 			cur_start_ind = i + 1;
-			i += (min_chunk_size_bytes - window_bytes);
+			i += min_chunk_size_bytes;
 			//printf("\n\tRemain Bytes: %lu\n\tCur Start Ind: %lu\n\ti: %lu\n\t Is Done? %d\n\n", remain_bytes, cur_start_ind, i, is_done);
 
 		}
