@@ -563,7 +563,11 @@ int process_send_header(Dedup_Send_Req * send_req){
 
 	int sockfd = send_req -> sockfd;
 
-	ssize_t sent_bytes = send(sockfd, &(send_req -> is_fingerprint), 1, 0);
+	int prev_sent = send_req -> send_header_offset;
+	void * cur_header = &(send_req -> header) + prev_sent;
+	size_t remain_size = sizeof(Dedup_Header) - prev_sent;
+
+	ssize_t sent_bytes = send(sockfd, cur_header, remain_size, 0);
 	if (sent_bytes == -1){
 		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
 			return 0;
@@ -572,9 +576,12 @@ int process_send_header(Dedup_Send_Req * send_req){
 		return -1;
 	}
 
-	// assert sent_byte == 1
+	if (sent_bytes < remain_size){
+		send_req -> send_header_offset += sent_bytes;
+		return 0;
+	}
 
-	// only 1 byte so if wasnt -1, then we know we sent the header
+	// otherwise we read the whole header
 	return 1;
 
 }
@@ -846,7 +853,7 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 void process_send_complete(Dedup_Send_Req * send_req){
 	// if this was a fingerprint send need to free resources and return 1
-	if (send_req -> is_fingerprint){
+	if (send_req -> header.is_fingerprint){
 		free(send_req -> send_fingerprint_state.packaged_fingerprints);
 		free(send_req -> send_fingerprint_state.content_refs);
 		free(send_req -> send_fingerprint_state.missing_fingerprint_inds);
@@ -863,7 +870,7 @@ int process_send(Dedup_Send_Req * send_req){
 			case SEND_HEADER:
 				to_continue = process_send_header(send_req);
 				if (to_continue == 1){
-					if (send_req -> is_fingerprint){
+					if (send_req -> header.is_fingerprint){
 						send_req -> stage = COMPUTE_FINGERPRINTS;
 					}
 					else{
@@ -957,13 +964,17 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	send_req -> size = size;
 	send_req -> data = data;
 	send_req -> offset = 0;
+	send_req -> send_header_offset = 0;
+	send_req -> send_fingerprint_header_offset = 0;
+
 
 	if (size > FINGERPRINT_MSG_SIZE_THRESHOLD){
-		send_req -> is_fingerprint = 1;
+		send_req -> header.is_fingerprint = 1;
 	}
 	else{
-		send_req -> is_fingerprint = 0;
+		send_req -> header.is_fingerprint = 0;
 	}
+	send_req -> header.content_size = size;
 
 	send_req -> stage = SEND_HEADER;
 
@@ -996,7 +1007,11 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 
 	int sockfd = recv_req -> sockfd;
 
-	ssize_t recv_bytes = send(sockfd, &(recv_req -> is_fingerprint), 1, 0);
+	int prev_recv = recv_req -> recv_header_offset;
+	void * cur_header = &(recv_req -> header) + prev_recv;
+	size_t remain_size = sizeof(Dedup_Header) - prev_recv;
+
+	ssize_t recv_bytes = recv(sockfd, cur_header, remain_size, 0);
 	if (recv_bytes == -1){
 		if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
 			return 0;
@@ -1005,9 +1020,12 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 		return -1;
 	}
 
-	// assert sent_byte == 1
+	if (recv_bytes < remain_size){
+		recv_req -> recv_header_offset += recv_bytes;
+		return 0;
+	}
 
-	// only 1 byte so if wasnt -1, then we know we sent the header
+	// otherwise we read the whole header
 	return 1;
 
 }
@@ -1017,11 +1035,11 @@ int process_recv_reg_data(Dedup_Recv_Req * recv_req) {
 	int sockfd = recv_req -> sockfd;
 
 	void * data = recv_req -> app_buffer;
-	uint64_t size = recv_req -> size;
+	uint64_t content_size = recv_req -> header.content_size;
 	uint64_t offset = recv_req -> app_offset;
 
 	void * cur_data = data + offset;
-	uint64_t remain_bytes = size - offset;
+	uint64_t remain_bytes = content_size - offset;
 
 	ssize_t recv_bytes = recv(sockfd, cur_data, remain_bytes, 0);
 
@@ -1036,7 +1054,7 @@ int process_recv_reg_data(Dedup_Recv_Req * recv_req) {
 	recv_req -> app_offset += recv_bytes;
 
 	// if we finished sending the whole thing
-	if (recv_req -> app_offset == size){
+	if (recv_req -> app_offset == content_size){
 		return 1;
 	}
 
@@ -1294,7 +1312,7 @@ int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 
 void process_recv_complete(Dedup_Recv_Req * recv_req){
 
-	if (recv_req -> is_fingerprint){
+	if (recv_req -> header.is_fingerprint){
 		free(recv_req -> recv_fingerprint_state.packaged_fingerprints);
 		free(recv_req -> recv_fingerprint_state.missing_fingerprint_slots);
 		free(recv_req -> recv_fingerprint_state.missing_fingerprint_inds);
@@ -1311,7 +1329,7 @@ int process_recv(Dedup_Recv_Req * recv_req){
 			case RECV_HEADER:
 				to_continue = process_recv_header(recv_req);
 				if (to_continue == 1){
-					if (recv_req -> is_fingerprint){
+					if (recv_req -> header.is_fingerprint){
 						recv_req -> stage = RECV_FINGERPRINT_HEADER;
 					}
 					else{
@@ -1407,6 +1425,8 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	recv_req -> app_buffer = data[0];
 	recv_req -> app_offset = 0;
 	recv_req -> app_filled_size = 0;
+	recv_req -> recv_header_offset = 0;
+	recv_req -> recv_fingerprint_header_offset = 0;
 
 	recv_req -> stage = RECV_HEADER;
 
@@ -1435,7 +1455,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 
 
 
-ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
+ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 	*done = 0;
 
@@ -1473,10 +1493,15 @@ ncclResult_t netDedup_test(void * request, int * done, int * sizes) {
 
 		// the recv will get freed during from irecvConsumed()
 		if (type == SEND_REQ){
-			// already freed the inner allocations (for fingerprint sends), but still need to free the container
-			free(req -> req);
-			free(req);
+			*size = (((Dedup_Send_Req *) (req -> req)) -> header).content_size;;	
 		}
+		else{
+			*size = (((Dedup_Recv_Req *) (req -> req)) -> header).content_size;
+		}
+
+		// already freed the inner allocations (for fingerprint sends), but still need to free the container
+		free(req -> req);
+		free(req);
 	}
 
 	// otherwise is_complete should be zero
@@ -1490,13 +1515,7 @@ ncclResult_t netDedup_irecvConsumed(void * recvComm, int n, void * request) {
 
 	INFO(NCCL_NET | NCCL_INIT, "Called irecvConsumed() for fd: %d\n", dedup_recv_comm -> fd);
 
-	Dedup_Req * req = (Dedup_Req *) request;
-
-	// now can free the recv request and dedup_req
-	free(req -> req);
-	free(req);
-
-	return ncclSuccess;
+	return ncclInternalError;
 }
 
 
