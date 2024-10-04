@@ -46,7 +46,7 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 		active_fds[i] = 0;
 	}
 
-	char * to_disable = getenv("SKIP_CACHE_INSERTS")
+	char * to_disable = getenv("SKIP_CACHE_INSERTS");
 	if (to_disable && (strncmp(to_disable, "1", 1) == 0)){
 		to_skip_cache_inserts = 1;
 	}
