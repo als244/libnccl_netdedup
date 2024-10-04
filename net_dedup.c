@@ -648,7 +648,7 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 	uint64_t num_fingerprints;
 
 	printf("Max fingerprints: %llu\n", max_fingerprints);
-	
+
 	uint8_t * raw_fingerprint_buffer = malloc(max_fingerprints * FINGERPRINT_NUM_BYTES);
 	uint64_t * boundaries = malloc(max_fingerprints * sizeof(uint64_t));
 
@@ -1159,8 +1159,10 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 
 	// if there was an error we need to report it
 	if (ret == -1){
-		fprintf(stderr, "Error: had an issue when processing send\n");
-		return ncclSystemError;
+		// fprintf(stderr, "Error: had an issue when processing send\n");
+		// return ncclSystemError;
+		fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
+		kill(0, SIGKILL);
 	}
 
 	// the test function will check if this has completed
@@ -1730,8 +1732,10 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 
 	// if there was an error we need to report it
 	if (ret == -1){
-		fprintf(stderr, "Error: had an issue when processing recv\n");
-		return ncclSystemError;
+		//fprintf(stderr, "Error: had an issue when processing recv\n");
+		//return ncclSystemError;
+		fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
+		kill(0, SIGKILL);
 	}
 
 	// the test function will check if this has completed
@@ -1766,12 +1770,17 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 	if (type == SEND_REQ){
 
 		// INFO(NCCL_NET | NCCL_INIT, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
+		if ((Dedup_Send_Req *) req -> req -> stage != SEND_COMPLETE){
 
-		is_complete = process_send((Dedup_Send_Req *) (req -> req));
-		if (is_complete == -1){
-			//return ncclSystemError;
-			fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
-			kill(0, SIGKILL);
+			is_complete = process_send((Dedup_Send_Req *) (req -> req));
+			if (is_complete == -1){
+				//return ncclSystemError;
+				fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
+				kill(0, SIGKILL);
+			}
+		}
+		else{
+			is_complete = 1;
 		}
 
 		sockfd = ((Dedup_Send_Req *) (req -> req)) -> sockfd;
@@ -1781,11 +1790,16 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 	if (type == RECV_REQ){
 
-		is_complete = process_recv((Dedup_Recv_Req *) (req -> req));
-		if (is_complete == -1){
-			//return ncclSystemError;
-			fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
-			kill(0, SIGKILL);
+		if ((Dedup_Send_Req *) req -> req -> stage != RECV_COMPLETE){
+			is_complete = process_recv((Dedup_Recv_Req *) (req -> req));
+			if (is_complete == -1){
+				//return ncclSystemError;
+				fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
+				kill(0, SIGKILL);
+			}
+		}
+		else{
+			is_complete = 1;
 		}
 
 		sockfd = ((Dedup_Recv_Req *) (req -> req)) -> sockfd;
