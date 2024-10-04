@@ -55,11 +55,6 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 		active_fds[i] = 0;
 	}
 
-	// when we get an insert error this will change
-	// could also set an environment variable...
-	to_skip_cache_inserts = 0;
-
-
 	return ncclSuccess;
 }
 
@@ -700,10 +695,6 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 
 	// INFO(NCCL_NET | NCCL_INIT, "In insert outbound fingerprints\n");
 
-	if (to_skip_cache_inserts){
-		return 1;
-	}
-
 	// 1.) try to obtain cache lock
 	if (pthread_mutex_trylock(&(global_fingerprint_cache -> cache_lock)) != 0){
 		return 0;
@@ -737,8 +728,7 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 		if (ret){
 			fprintf(stderr, "CACHE IS FULL\n");
 			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
-			to_skip_cache_inserts = 1;
-			return 1;
+			return -1;
 		}
 		cur_buffer += packaged_fingerprints[i].content_size;
 	}
@@ -1543,10 +1533,6 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 
 	// INFO(NCCL_NET | NCCL_INIT, "In insert inbound fingerprints\n");
 
-	if (to_skip_cache_inserts){
-		return 1;
-	}
-
 	if (pthread_mutex_trylock(&(global_fingerprint_cache -> cache_lock)) != 0){
 		return 0;
 	}
@@ -1565,8 +1551,7 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 		if (ret){
 			fprintf(stderr, "CACHE IS FULL! Not inserting anymore...\n");
 			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
-			to_skip_cache_inserts = 1;
-			return 1;
+			return -1;
 		}
 	}
 
