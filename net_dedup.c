@@ -873,10 +873,16 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	uint64_t cur_offset = (send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset;
 
+	INFO(NCCL_NET | NCCL_INIT, "In sending missing content:\n\tCur Send fingerprint ind: %llu\n\tCur offset: %llu\n", cur_send_fingerprint_ind, cur_offset);
+
 	uint64_t remain_bytes;
 
 	// make life easier by doing extra copy into temp buffer instead of dealing with cache page alignment messiness...
 	void * temp_buffer = malloc(SAFE_MAX_CHUNK_SIZE_BYTES);
+	if (!temp_buffer){
+		perror("malloc(), temp_buffer within send_missing content");
+		return -1;
+	}
 	
 	for (uint64_t i = cur_send_fingerprint_ind; i < num_missing_fingerprints; i++){
 
@@ -1391,7 +1397,7 @@ int process_send_missing_fingerprints(Dedup_Recv_Req * recv_req){
 
 int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 
-	INFO(NCCL_NET | NCCL_INIT, "Finished sending missing fingerprints\n");
+	INFO(NCCL_NET | NCCL_INIT, "In recv missing content\n");
 
 	int sockfd = recv_req -> sockfd;
 
