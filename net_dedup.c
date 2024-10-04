@@ -46,6 +46,10 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 		active_fds[i] = 0;
 	}
 
+	// when we get an insert error this will change
+	// could also set an environment variable...
+	to_skip_cache_inserts = 0;
+
 
 	return ncclSuccess;
 }
