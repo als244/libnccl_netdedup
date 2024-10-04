@@ -1498,7 +1498,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 		// the recv will get freed during from irecvConsumed()
 		if (type == SEND_REQ){
-			*size = (((Dedup_Send_Req *) (req -> req)) -> header).content_size;;	
+			*size = (((Dedup_Send_Req *) (req -> req)) -> header).content_size;
 		}
 		else{
 			*size = (((Dedup_Recv_Req *) (req -> req)) -> header).content_size;
