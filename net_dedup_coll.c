@@ -10,7 +10,7 @@ ncclResult_t netDedupColl_init(ncclDebugLogger_t logFunction) {
 
 ncclResult_t netDedupColl_devices(int * ndev) {
 
-	*ndev = net_dedup_state -> num_net_devices;
+	*ndev = net_dedup_state.num_net_devices;
 	return ncclSuccess;
 }
 

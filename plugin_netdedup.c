@@ -10,7 +10,7 @@
 #define COLL_PLUGIN_NAME "CollDedup"
 
 
-Net_Dedup_State * net_dedup_state;
+Net_Dedup_State net_dedup_state;
 
 int active_fds[MAX_FDS];
 
