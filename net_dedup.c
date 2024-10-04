@@ -1770,7 +1770,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 	if (type == SEND_REQ){
 
 		// INFO(NCCL_NET | NCCL_INIT, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
-		if ((Dedup_Send_Req *) req -> req -> stage != SEND_COMPLETE){
+		if (((Dedup_Send_Req *) req -> req) -> stage != SEND_COMPLETE){
 
 			is_complete = process_send((Dedup_Send_Req *) (req -> req));
 			if (is_complete == -1){
@@ -1790,7 +1790,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 	if (type == RECV_REQ){
 
-		if ((Dedup_Send_Req *) req -> req -> stage != RECV_COMPLETE){
+		if (((Dedup_Recv_Req *) req -> req) -> stage != RECV_COMPLETE){
 			is_complete = process_recv((Dedup_Recv_Req *) (req -> req));
 			if (is_complete == -1){
 				//return ncclSystemError;
