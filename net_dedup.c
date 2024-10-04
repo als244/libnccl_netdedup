@@ -859,10 +859,10 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	int sockfd = send_req -> sockfd;
 
-	uint64_t num_missing_fingerprints = send_req -> send_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints;
+	uint64_t num_missing_fingerprints = (send_req -> send_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints;
 
-	Fingerprint_Entry * content_refs = send_req -> send_fingerprint_state.content_refs;
-	uint64_t * missing_fingerprint_inds = send_req -> send_fingerprint_state.missing_fingerprint_inds;
+	Fingerprint_Entry * content_refs = (send_req -> send_fingerprint_state).content_refs;
+	uint64_t * missing_fingerprint_inds = (send_req -> send_fingerprint_state).missing_fingerprint_inds;
 
 	uint64_t reply_ind;
 
@@ -870,6 +870,7 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	// 1.) send as many more fingerprints as possible
 	uint64_t cur_send_fingerprint_ind = (send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind;
+
 	uint64_t cur_offset = (send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset;
 
 	uint64_t remain_bytes;
@@ -888,6 +889,7 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 		// in the case of first fingerprint in this loop in case we couldn't send the whole thing the last time
 		// otherwise cur_offset will be set to 0
 		remain_bytes = content_refs[reply_ind].content_size - cur_offset;
+		
 		sent_bytes = send(sockfd, temp_buffer + cur_offset, remain_bytes, 0);
 
 		if (sent_bytes == -1){
@@ -1203,6 +1205,9 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 
 int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
 
+
+	INFO(NCCL_NET | NCCL_INIT, "In recv packaged fingerprints\n");
+
 	int sockfd = recv_req -> sockfd;
 
 	int prev_recv = recv_req -> recv_fingerprint_state.recv_fingerprint_offset;
@@ -1228,6 +1233,9 @@ int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
 	}
 
 	// otherwise we sent the whole thing so we can continue
+
+	INFO(NCCL_NET | NCCL_INIT, "Finished in recv packaged fingerprints, recevied %llu fingerprints\n", recv_req -> fingerprint_header.num_fingerprints);
+
 	return 1;
 }
 
@@ -1235,6 +1243,8 @@ int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
 int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
 	int ret;
+
+	INFO(NCCL_NET | NCCL_INIT, "In populate from net cache\n");
 
 	uint64_t num_fingerprints = recv_req -> fingerprint_header.num_fingerprints;
 	Fingerprint * packaged_fingerprints = recv_req -> recv_fingerprint_state.packaged_fingerprints;
@@ -1284,9 +1294,17 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 	net_dedup_state.global_fingerprint_cache -> stats.total_found_fingerprints += (num_fingerprints - num_missing_fingerprints);
 	pthread_mutex_unlock(&(net_dedup_state.global_fingerprint_cache -> cache_lock));
 
+	uint64_t redudant_bytes = total_bytes - total_missing_bytes;
+	double redudant_ratio = 100 * ((double) redudant_bytes / (double) total_bytes);
+
 
 	// set the number of missing fingerprints for next stage to send out
 	recv_req -> recv_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints = num_missing_fingerprints;
+
+
+	INFO(NCCL_NET | NCCL_INIT, "Finished populating from net cache!\n");
+
+	INFO(NCCL_NET | NCCL_INIT, "Capture stats:\n\tRedundant Ratio: %lu / %lu\n\tRedundant Percentage: %.2f%%\n\n", redudant_bytes, total_bytes, redudant_ratio);
 
 	return 1;
 }
