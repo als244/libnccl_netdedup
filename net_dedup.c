@@ -1337,7 +1337,7 @@ int process_recv(Dedup_Recv_Req * recv_req){
 			case RECV_MISSING_CONTENT:
 				to_continue = process_recv_missing_content(recv_req);
 				if (to_continue == 1){
-					recv_req -> stage = SEND_COMPLETE;
+					recv_req -> stage = RECV_COMPLETE;
 				}
 				break;
 			case RECV_COMPLETE:
