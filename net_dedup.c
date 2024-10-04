@@ -1268,7 +1268,7 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 
 	recv_req -> recv_fingerprint_state.packaged_fingerprints = malloc(recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes);
 	if (!recv_req -> recv_fingerprint_state.packaged_fingerprints){
-		perror("malloc() for recving packaged fingerprints");
+		perror("malloc() for recving packaged fingerprints\n\tSize: %lu", recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes);
 		return -1;
 	}
 
