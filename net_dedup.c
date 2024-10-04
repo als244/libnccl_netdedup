@@ -687,6 +687,10 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 
 	// INFO(NCCL_NET | NCCL_INIT, "In insert outbound fingerprints\n");
 
+	if (to_skip_cache_inserts){
+		return 1;
+	}
+
 	// 1.) try to obtain cache lock
 	if (pthread_mutex_trylock(&(global_fingerprint_cache -> cache_lock)) != 0){
 		return 0;
@@ -718,9 +722,10 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 		// we are saving the content refs that might be needed for reply without cache lookup again
 		ret = insert_fingerprint(global_fingerprint_cache, &(packaged_fingerprints[i]), cur_buffer, &(content_refs[i]));
 		if (ret){
-			fprintf(stderr, "Error: inserting fingerprint failed\n");
+			fprintf(stderr, "CACHE IS FULL\n");
 			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
-			return -1;
+			to_skip_cache_inserts = 1;
+			return 1;
 		}
 		cur_buffer += packaged_fingerprints[i].content_size;
 	}
@@ -1523,6 +1528,10 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 
 	// INFO(NCCL_NET | NCCL_INIT, "In insert inbound fingerprints\n");
 
+	if (to_skip_cache_inserts){
+		return 1;
+	}
+
 	if (pthread_mutex_trylock(&(global_fingerprint_cache -> cache_lock)) != 0){
 		return 0;
 	}
@@ -1539,9 +1548,10 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 		// insert the content into cache
 		ret = insert_fingerprint(global_fingerprint_cache, &(packaged_fingerprints[missing_fingerprint_inds[i]]), missing_fingerprint_slots[i], &new_entry);
 		if (ret){
-			fprintf(stderr, "Error: inserting fingerprint failed\n");
+			fprintf(stderr, "CACHE IS FULL! Not inserting anymore...\n");
 			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
-			return -1;
+			to_skip_cache_inserts = 1;
+			return 1;
 		}
 	}
 
