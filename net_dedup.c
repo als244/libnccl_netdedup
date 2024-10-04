@@ -1701,7 +1701,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	recv_req -> app_filled_size = 0;
 	recv_req -> recv_header_offset = 0;
 	recv_req -> recv_fingerprint_header_offset = 0;
-	recv_req -> freed = 1;
+	recv_req -> freed = 0;
 
 	recv_req -> stage = RECV_HEADER;
 
