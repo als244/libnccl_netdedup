@@ -497,12 +497,16 @@ ncclResult_t netDedup_accept_v7(void * listenComm, void ** recvComm, ncclNetDevi
 ncclResult_t netDedup_closeListen(void * listenComm) {
 
 	Dedup_Listen_Comm * dedup_listen_comm = (Dedup_Listen_Comm *) listenComm;
+	
+	if (!dedup_listen_comm){
+		return ncclSuccess;
+	}	
+
 	int listenFd = dedup_listen_comm -> listenFd;
 
 	// INFO(NCCL_NET | NCCL_INIT, "Called closeListen() for listenFd: %d\n", listenFd);
 
 	close(listenFd);
-
 	free(dedup_listen_comm);
 
 	return ncclSuccess;
@@ -613,7 +617,7 @@ int process_send_reg_data(Dedup_Send_Req * send_req) {
 	void * cur_data = data + offset;
 	uint64_t remain_bytes = size - offset;
 
-	if (size == 0){
+	if (remain_bytes == 0){
 		return 1;
 	}
 
@@ -1648,7 +1652,6 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	int ret;
 
 	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
-	int dev_num = dedup_recv_comm -> dev_num;
 	int sockfd = dedup_recv_comm -> fd;
 
 	if (active_fds[sockfd]){
@@ -1715,6 +1718,14 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 	*done = 0;
 
+	if (!request){
+		*done = 1;
+		if (size){
+			*size = 0;
+		}
+		return ncclSuccess;
+	}
+
 	Dedup_Req * req = (Dedup_Req *) request;
 
 	ReqType type = req -> type;
@@ -1725,8 +1736,6 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 	Dedup_Send_Req * send_req;
 	Dedup_Recv_Req * recv_req;
-
-
 
 	if (type == SEND_REQ){
 
@@ -1821,9 +1830,10 @@ ncclResult_t netDedup_closeSend(void * sendComm) {
 
 	// INFO(NCCL_NET | NCCL_INIT, "Called closeSend() for fd: %d\n", dedup_send_comm -> fd);
 
-	close(dedup_send_comm -> fd);
-
-	free(dedup_send_comm);
+	if (sendComm){
+		close(dedup_send_comm -> fd);
+		free(dedup_send_comm);
+	}
 
 	return ncclSuccess;
 }
@@ -1834,9 +1844,10 @@ ncclResult_t netDedup_closeRecv(void * recvComm) {
 
 	// INFO(NCCL_NET | NCCL_INIT, "Called closeRecv() for fd: %d\n", dedup_recv_comm -> fd);
 
-	close(dedup_recv_comm -> fd);
-
-	free(dedup_recv_comm);
+	if (recvComm){
+		close(dedup_recv_comm -> fd);
+		free(dedup_recv_comm);
+	}
 
 	return ncclSuccess;
 }
