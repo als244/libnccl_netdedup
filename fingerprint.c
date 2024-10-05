@@ -89,7 +89,7 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 	cur_rabin = cur_rabin & rabin_mask;
 
 	
-	while(1){
+	while(remain_bytes > 0){
 		// special case of immediate magic match
 		magic_check = cur_rabin & magic_mask;
 		if ((magic_check == magic_val) || (cur_size >= max_chunk_size_bytes) || (cur_size >= remain_bytes)){
@@ -97,21 +97,15 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 			// check if we are done
 			if ((cur_size >= remain_bytes) || ((remain_bytes - cur_size) < min_chunk_size_bytes)){
 				cur_size = remain_bytes;
-				handle_sha(data, cur_start_ind, cur_size, &fingerprints[num_fingerprints]);
-				content_sizes[num_fingerprints] = cur_size;
-				num_fingerprints++;
-				remain_bytes = 0;
-				break;
 			}
-
+			
 			// if we aren't done
 			handle_sha(data, cur_start_ind, cur_size, &fingerprints[num_fingerprints]);
 			content_sizes[num_fingerprints] = cur_size;
 			num_fingerprints++;
-			remain_bytes -= cur_size;
 
-			cur_start_ind += cur_size;
 			remain_bytes -= cur_size;
+			cur_start_ind += cur_size;
 
 			init_window_byte = (uint8_t *) (((uint64_t) data) + cur_start_ind + min_chunk_size_bytes - 1 - window_bytes);
 			cur_rabin = init_rabin(init_window_byte, rabin_p, rabin_mask, window_bytes, window);
