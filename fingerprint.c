@@ -84,7 +84,8 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 	uint8_t cur_data_byte;
 	uint64_t rabin_diff;
 
-	uint64_t cur_rabin = init_rabin(data + min_chunk_size_bytes - 1 - window_bytes, rabin_p, rabin_mask, window_bytes, window);
+	uint8_t * init_window_byte = (uint8_t *) (((uint64_t) data) + min_chunk_size_bytes - 1 - window_bytes);
+	uint64_t cur_rabin = init_rabin(init_window_byte, rabin_p, rabin_mask, window_bytes, window);
 	cur_rabin = cur_rabin & rabin_mask;
 
 	
@@ -112,7 +113,8 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 			cur_start_ind += cur_size;
 			remain_bytes -= cur_size;
 
-			cur_rabin = init_rabin(data + cur_start_ind + min_chunk_size_bytes - 1 - window_bytes, rabin_p, rabin_mask, window_bytes, window);
+			init_window_byte = (uint8_t *) (((uint64_t) data) + cur_start_ind + min_chunk_size_bytes - 1 - window_bytes);
+			cur_rabin = init_rabin(init_window_byte, rabin_p, rabin_mask, window_bytes, window);
 			cur_size = min_chunk_size_bytes;
 			continue;
 		}
