@@ -1360,7 +1360,7 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 			total_missing_bytes += packaged_fingerprints[i].content_size;
 		}
 		else{
-			if (TO_PRINT_INTERCEPT_INFO && TO_PRINT_FINGERPRINT_INFO){
+			if (TO_PRINT_FINGERPRINT_INFO){
 				printf("Found fingerprint ind #%lu!\n", i);
 			}
 			copy_fingerprint_content((void *) cur_app_buffer, global_fingerprint_cache, &entry);
