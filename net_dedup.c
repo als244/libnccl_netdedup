@@ -1175,6 +1175,12 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 	}
 
 	// otherwise we read the whole header
+
+	char is_fingerprint = recv_req -> header.is_fingerprint;
+	uint64_t num_bytes = recv_req -> header.content_size;
+
+	INFO(NCCL_NET | NCCL_INIT, "process_recv_header(): Incoming receive!\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
+
 	return 1;
 
 }
@@ -1239,7 +1245,7 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 		return 0;
 	}
 
-	// otherwise we sent the entire header
+	// otherwise we recvd the entire header
 
 	// we need to allocate temporary structures to make life easier
 	uint64_t num_fingerprints = recv_req -> fingerprint_header.num_fingerprints;
@@ -1270,6 +1276,8 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 	(recv_req -> recv_fingerprint_state).send_missing_fingerprint_inds_offset = 0;
 	(recv_req -> recv_fingerprint_state).cur_recv_content_ind = 0;
 	(recv_req -> recv_fingerprint_state).cur_recv_content_offset = 0;
+
+	INFO(NCCL_NET | NCCL_INIT, "process_fingerprint_header(): Incoming fingerprint receive!\n\tNum fingerprints: %lu\n\n", num_fingerprints);
 
 	return 1;
 }
@@ -1662,7 +1670,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 		return ncclSuccess;
 	}
 
-	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
+	//INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
 
 	Dedup_Req * req = malloc(sizeof(Dedup_Req));
 	if (!req){
