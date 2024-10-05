@@ -941,6 +941,8 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 	for (uint64_t i = cur_send_fingerprint_ind; i < num_missing_fingerprints; i++){
 
 		reply_ind = missing_fingerprint_inds[i];
+
+
 		cur_fingerprint = (send_req -> data) + fingerprint_offsets[reply_ind] + cur_fingerprint_offset;
 
 		// in the case of first fingerprint in this loop in case we couldn't send the whole thing the last time
@@ -1652,6 +1654,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	int ret;
 
 	Dedup_Recv_Comm * dedup_recv_comm = (Dedup_Recv_Comm *) recvComm;
+	int dev_num = dedup_recv_comm -> dev_num;
 	int sockfd = dedup_recv_comm -> fd;
 
 	if (active_fds[sockfd]){
@@ -1659,7 +1662,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 		return ncclSuccess;
 	}
 
-	// INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
+	INFO(NCCL_NET | NCCL_INIT, "Calling irecv() on dev #%d!\n\tSize: %d", dev_num, sizes[0]);
 
 	Dedup_Req * req = malloc(sizeof(Dedup_Req));
 	if (!req){
