@@ -17,6 +17,8 @@ int active_fds[MAX_FDS];
 
 ncclDebugLogger_t nccl_log_func;
 
+int to_skip_insert_cache;
+
 // Setting the same functions to null as in reference NCCL-Socket implementation:
 //  Ref: https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
 

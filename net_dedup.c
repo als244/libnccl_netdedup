@@ -27,12 +27,12 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 			sleep(1);
 			fd = shm_open(FINGERPRINT_CACHE_PATH, O_RDWR, 0);
 		}
-		INFO(NCCL_NET | NCCL_INIT, "Found existing fingerprint cache in system, and mmapping it in to address space!\n", pid);
+		INFO(NCCL_NET | NCCL_INIT, "Found existing fingerprint cache in system, and mmapping it in to address space!\n");
 		global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
 	}
 	// we just created it
 	else{
-		INFO(NCCL_NET | NCCL_INIT, "Creating and initializing global fingerprint table & cache!\n\tTotal size (table + cache): %lu\n", pid, sizeof(Fingerprint_Cache));
+		INFO(NCCL_NET | NCCL_INIT, "Creating and initializing global fingerprint table & cache!\n\tTotal size (table + cache): %lu\n", sizeof(Fingerprint_Cache));
 		ftruncate(fd, sizeof(Fingerprint_Cache));
 		global_fingerprint_cache = mmap(0,sizeof(Fingerprint_Cache),PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);
 
@@ -44,6 +44,14 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 
 	for (int i = 0; i < MAX_FDS; i++){
 		active_fds[i] = 0;
+	}
+
+		
+	to_skip_insert_cache = 0;
+
+	char * to_skip_env = getenv("SKIP_INSERT_CACHE");
+	if (to_skip_env && (strncmp(to_skip_env, "1", 1) == 0)){
+		to_skip_insert_cache = 1;
 	}
 
 
@@ -670,68 +678,22 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	uint64_t num_fingerprints = dedup_fingerprinting(data, size, &(send_state -> packaged_fingerprints));
 	fingerprint_header -> num_fingerprints = num_fingerprints;
 
-	// INFO(NCCL_NET | NCCL_INIT, "Completed compute_fingerprints():\n\tNum fingerprints: %llu\n", num_fingerprints);
-
-	return 1;
-}
-
-int my_breakpoint_func(uint64_t num_fingerprints){
-
-	return num_fingerprints >> 60;
-
-}
-
-int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
-
-	// INFO(NCCL_NET | NCCL_INIT, "In insert outbound fingerprints\n");
-
-	// 1.) try to obtain cache lock
-	if (pthread_mutex_trylock(&(global_fingerprint_cache -> cache_lock)) != 0){
-		return 0;
-	}
-
-	// we obtained the lock, so continue
-	// INFO(NCCL_NET | NCCL_INIT, "Obtained cache lock!\n");
-
-
-	// 2.) insert all the fingerprints into local cache to retrieve content refs
-
-	uint64_t num_fingerprints = send_req -> fingerprint_header.num_fingerprints;
-
-	Fingerprint * packaged_fingerprints = send_req -> send_fingerprint_state.packaged_fingerprints;
-	Fingerprint_Entry * content_refs = malloc(num_fingerprints * sizeof(Fingerprint_Entry));
-	if (!content_refs){
-		perror("malloc() for content refs when computing fingerprints");
+	uint64_t * fingerprint_offsets = malloc(num_fingerprints * sizeof(uint64_t));
+	if (!fingerprint_offsets){
+		perror("malloc() for fingerprint_offsets");
 		return -1;
 	}
 
-	INFO(NCCL_NET | NCCL_INIT, "Inserting fingerprints into cache...\n");
-
-	int ret;
-
-	void * data = send_req -> data;
-	void * cur_buffer = data;
+	Fingerprint * packaged_fingerprints = send_state -> packaged_fingerprints;
+	uint64_t cur_offset = 0;
 	for (uint64_t i = 0; i < num_fingerprints; i++){
-		// takes care of duplicates
-		// we are saving the content refs that might be needed for reply without cache lookup again
-		ret = insert_fingerprint(global_fingerprint_cache, &(packaged_fingerprints[i]), cur_buffer, &(content_refs[i]));
-		if (ret){
-			fprintf(stderr, "Error: inserting fingerprint failed\n");
-			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
-			return -1;
-		}
-		cur_buffer += packaged_fingerprints[i].content_size;
+		fingerprint_offsets[i] = cur_offset;
+		cur_offset += packaged_fingerprints[i].content_size;
 	}
 
-	pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
-
-	// INFO(NCCL_NET | NCCL_INIT, "Finished inserting fingerprints into cache...\n");
-
+	send_state -> fingerprint_offsets = fingerprint_offsets;
 	
-	Fingerprint_Send_State * send_state = &(send_req -> send_fingerprint_state);
-
-	// save the content refs as part of request
-	send_state -> content_refs = content_refs;
+	// INFO(NCCL_NET | NCCL_INIT, "Completed compute_fingerprints():\n\tNum fingerprints: %llu\n", num_fingerprints)
 
 	// 3.) initialize the structures needed for this send request
 
@@ -753,9 +715,61 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 	send_state -> cur_reply_content_fingerprint_ind = 0;
 	send_state -> cur_reply_content_fingerprint_offset = 0;
 
-	
+	return 1;
+}
 
-	// INFO(NCCL_NET | NCCL_INIT, "Finished inserting outbound fingerprints\n");
+int my_breakpoint_func(uint64_t num_fingerprints){
+
+	return num_fingerprints >> 60;
+
+}
+
+int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
+
+	// INFO(NCCL_NET | NCCL_INIT, "In insert outbound fingerprints\n");
+
+	if (to_skip_insert_cache){
+		return 1;
+	}
+
+	// 1.) try to obtain cache lock
+	if (pthread_mutex_trylock(&(global_fingerprint_cache -> cache_lock)) != 0){
+		return 0;
+	}
+
+	// we obtained the lock, so continue
+	// INFO(NCCL_NET | NCCL_INIT, "Obtained cache lock!\n");
+
+
+	// 2.) insert all the fingerprints into local cache to retrieve content refs
+
+	uint64_t num_fingerprints = send_req -> fingerprint_header.num_fingerprints;
+
+	Fingerprint * packaged_fingerprints = send_req -> send_fingerprint_state.packaged_fingerprints;
+
+	INFO(NCCL_NET | NCCL_INIT, "Inserting fingerprints into cache...\n");
+
+	int ret;
+
+	void * data = send_req -> data;
+	void * cur_buffer = data;
+	Fingerprint_Entry new_entry;
+	for (uint64_t i = 0; i < num_fingerprints; i++){
+		// takes care of duplicates
+		// we are saving the content refs that might be needed for reply without cache lookup again
+		ret = insert_fingerprint(global_fingerprint_cache, &(packaged_fingerprints[i]), cur_buffer, &new_entry);
+		if (ret){
+			fprintf(stderr, "CACHE IS FULL\n");
+			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
+			to_skip_insert_cache = 1;
+			return 1;
+		}
+		cur_buffer += packaged_fingerprints[i].content_size;
+	}
+
+	pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
+
+	// INFO(NCCL_NET | NCCL_INIT, "Finished inserting fingerprints into cache...\n");	
 
 	return 1;
 }
@@ -901,9 +915,9 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	int sockfd = send_req -> sockfd;
 
+	Fingerprint * packaged_fingerprints = (send_req -> send_fingerprint_state).packaged_fingerprints;
 	uint64_t num_missing_fingerprints = (send_req -> send_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints;
-
-	Fingerprint_Entry * content_refs = (send_req -> send_fingerprint_state).content_refs;
+	uint64_t * fingerprint_offsets = (send_req -> send_fingerprint_state).fingerprint_offsets;
 	uint64_t * missing_fingerprint_inds = (send_req -> send_fingerprint_state).missing_fingerprint_inds;
 
 	uint64_t reply_ind;
@@ -912,36 +926,26 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	// 1.) send as many more fingerprints as possible
 	uint64_t cur_send_fingerprint_ind = (send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind;
-
-	uint64_t cur_offset = (send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset;
+	uint64_t cur_fingerprint_offset = (send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset;
 
 	// INFO(NCCL_NET | NCCL_INIT, "In sending missing content:\n\tSockfd: %d\n\tTotal missing fingerprints: %llu\n\tCur Send fingerprint ind: %llu\n\tCur offset: %llu\n", sockfd, num_missing_fingerprints, cur_send_fingerprint_ind, cur_offset);
 
 	uint64_t remain_bytes;
 
-	// make life easier by doing extra copy into temp buffer instead of dealing with cache page alignment messiness...
-	void * temp_buffer = malloc(SAFE_MAX_CHUNK_SIZE_BYTES);
-	if (!temp_buffer){
-		perror("malloc(), temp_buffer within send_missing content");
-		return -1;
-	}
+	void * cur_fingerprint;
 	
 	for (uint64_t i = cur_send_fingerprint_ind; i < num_missing_fingerprints; i++){
 
 		reply_ind = missing_fingerprint_inds[i];
-
-		// INFO(NCCL_NET | NCCL_INIT, "Attempting to send missing content for:\n\tMissing fingerprint #%llu\n\tIndex: %llu\n", i, reply_ind);
-
-		copy_fingerprint_content(temp_buffer, global_fingerprint_cache, &(content_refs[reply_ind]));
+		cur_fingerprint = (send_req -> data) + fingerprint_offsets[reply_ind] + cur_fingerprint_offset;
 
 		// in the case of first fingerprint in this loop in case we couldn't send the whole thing the last time
 		// otherwise cur_offset will be set to 0
-		remain_bytes = content_refs[reply_ind].content_size - cur_offset;
+		remain_bytes = packaged_fingerprints[reply_ind].content_size - cur_fingerprint_offset;
 		
-		sent_bytes = send(sockfd, temp_buffer + cur_offset, remain_bytes, 0);
+		sent_bytes = send(sockfd, cur_fingerprint, remain_bytes, 0);
 
 		if (sent_bytes == -1){
-			free(temp_buffer);
 			if ((errno = EAGAIN) || (errno == EWOULDBLOCK)){
 				return 0;
 			}
@@ -951,8 +955,7 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 		if (sent_bytes < remain_bytes){
 			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind = i;
-			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = cur_offset + sent_bytes;
-			free(temp_buffer);
+			(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = cur_fingerprint_offset + sent_bytes;
 			return 0;
 		}
 
@@ -960,11 +963,8 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 		(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_ind = i + 1;
 		(send_req -> send_fingerprint_state).cur_reply_content_fingerprint_offset = 0;
 	
-		cur_offset = 0;
+		cur_fingerprint_offset = 0;
 	}
-
-	free(temp_buffer);
-
 
 	// INFO(NCCL_NET | NCCL_INIT, "Finished sending missing content\n");
 
@@ -974,11 +974,6 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 
 void process_send_complete(Dedup_Send_Req * send_req){
 	// if this was a fingerprint send need to free resources and return 1
-	if (send_req -> header.is_fingerprint){
-		free(send_req -> send_fingerprint_state.packaged_fingerprints);
-		free(send_req -> send_fingerprint_state.content_refs);
-		free(send_req -> send_fingerprint_state.missing_fingerprint_inds);
-	}
 	return;
 }
 
@@ -1520,6 +1515,9 @@ int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 
 	// INFO(NCCL_NET | NCCL_INIT, "In insert inbound fingerprints\n");
+	if (to_skip_insert_cache){
+		return 1;
+	}
 
 	if (pthread_mutex_trylock(&(global_fingerprint_cache -> cache_lock)) != 0){
 		return 0;
@@ -1537,9 +1535,10 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 		// insert the content into cache
 		ret = insert_fingerprint(global_fingerprint_cache, &(packaged_fingerprints[missing_fingerprint_inds[i]]), missing_fingerprint_slots[i], &new_entry);
 		if (ret){
-			fprintf(stderr, "Error: inserting fingerprint failed\n");
+			fprintf(stderr, "CACHE IS FULL\n");
 			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
-			return -1;
+			to_skip_insert_cache = 1;
+			return 1;
 		}
 	}
 
@@ -1552,12 +1551,6 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 
 
 void process_recv_complete(Dedup_Recv_Req * recv_req){
-
-	if (recv_req -> header.is_fingerprint){
-		free(recv_req -> recv_fingerprint_state.packaged_fingerprints);
-		free(recv_req -> recv_fingerprint_state.missing_fingerprint_slots);
-		free(recv_req -> recv_fingerprint_state.missing_fingerprint_inds);
-	}
 	return;
 }
 
@@ -1730,34 +1723,41 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 	int sockfd;
 
+	Dedup_Send_Req * send_req;
+	Dedup_Recv_Req * recv_req;
+
 
 
 	if (type == SEND_REQ){
 
 		// INFO(NCCL_NET | NCCL_INIT, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
 
-		is_complete = process_send((Dedup_Send_Req *) (req -> req));
+		send_req = (Dedup_Send_Req *) (req -> req);
+
+		is_complete = process_send(send_req);
 		if (is_complete == -1){
 			//return ncclSystemError;
 			fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
 			kill(0, SIGKILL);
 		}
 
-		sockfd = ((Dedup_Send_Req *) (req -> req)) -> sockfd;
+		sockfd = send_req -> sockfd;
 
 		// INFO(NCCL_NET | NCCL_INIT, "Called process_send()\n\tIs Complete: %d\n", is_complete);
 	}
 
 	if (type == RECV_REQ){
 
-		is_complete = process_recv((Dedup_Recv_Req *) (req -> req));
+		recv_req = (Dedup_Recv_Req *) (req -> req);
+
+		is_complete = process_recv(recv_req);
 		if (is_complete == -1){
 			//return ncclSystemError;
 			fprintf(stderr, "EXITING (gracefully after cache full for demo)!\n");
 			kill(0, SIGKILL);
 		}
 
-		sockfd = ((Dedup_Recv_Req *) (req -> req)) -> sockfd;
+		sockfd = recv_req -> sockfd;
 	}
 
 
@@ -1770,14 +1770,30 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		if (size != NULL){
 			// the recv will get freed during from irecvConsumed()
 			if (type == SEND_REQ){
-				*size = (int) ((((Dedup_Send_Req *) (req -> req)) -> header).content_size);
+				*size = (int) (send_req -> header).content_size;
 			}
 			else{
-				*size = (((Dedup_Recv_Req *) (req -> req)) -> header).content_size;
+				*size = (int) (recv_req -> header).content_size;
 			}
 		}
 
 		// already freed the inner allocations (for fingerprint sends), but still need to free the container
+
+		if (type == SEND_REQ){
+			if (send_req -> header.is_fingerprint){
+				free(send_req -> send_fingerprint_state.packaged_fingerprints);
+				free(send_req -> send_fingerprint_state.fingerprint_offsets);
+				free(send_req -> send_fingerprint_state.missing_fingerprint_inds);
+			}
+		}
+		else{
+			if (recv_req -> header.is_fingerprint){
+				free(recv_req -> recv_fingerprint_state.packaged_fingerprints);
+				free(recv_req -> recv_fingerprint_state.missing_fingerprint_slots);
+				free(recv_req -> recv_fingerprint_state.missing_fingerprint_inds);
+			}
+		}
+
 		free(req -> req);
 		free(req);
 

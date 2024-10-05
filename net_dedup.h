@@ -110,7 +110,7 @@ typedef struct fingerprint_recv_state {
 
 typedef struct fingerprint_send_state {
 	Fingerprint * packaged_fingerprints;
-	Fingerprint_Entry * content_refs;
+	uint64_t * fingerprint_offsets;
 	uint64_t packaged_fingerprints_size_bytes;
 	uint64_t send_fingerprint_offset;
 	// receved from other side
@@ -170,6 +170,7 @@ extern Net_Dedup_State net_dedup_state;
 extern Fingerprint_Cache * global_fingerprint_cache;
 extern ncclDebugLogger_t nccl_log_func;
 extern int active_fds[MAX_FDS];
+extern int to_skip_insert_cache;
 
 
 // EXPORTED NCCL FUNCTIONS USED AS PLUGIN!
