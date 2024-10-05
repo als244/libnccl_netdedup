@@ -98,7 +98,7 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 			if ((cur_size >= remain_bytes) || ((remain_bytes - cur_size) < min_chunk_size_bytes)){
 				cur_size = remain_bytes;
 			}
-			
+
 			// if we aren't done
 			handle_sha(data, cur_start_ind, cur_size, &fingerprints[num_fingerprints]);
 			content_sizes[num_fingerprints] = cur_size;
@@ -107,9 +107,12 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 			remain_bytes -= cur_size;
 			cur_start_ind += cur_size;
 
-			init_window_byte = (uint8_t *) (((uint64_t) data) + cur_start_ind + min_chunk_size_bytes - 1 - window_bytes);
-			cur_rabin = init_rabin(init_window_byte, rabin_p, rabin_mask, window_bytes, window);
-			cur_size = min_chunk_size_bytes;
+			if (remain_bytes > 0){
+				init_window_byte = (uint8_t *) (((uint64_t) data) + cur_start_ind + min_chunk_size_bytes - 1 - window_bytes);
+				cur_rabin = init_rabin(init_window_byte, rabin_p, rabin_mask, window_bytes, window);
+				cur_size = min_chunk_size_bytes;
+			}
+			
 			continue;
 		}
 		
