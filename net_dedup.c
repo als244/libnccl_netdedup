@@ -637,25 +637,23 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 	uint64_t max_fingerprints = (n / (settings -> min_chunk_size_bytes)) + 1;
 	uint64_t num_fingerprints;
 	uint8_t * raw_fingerprint_buffer = malloc(max_fingerprints * FINGERPRINT_NUM_BYTES);
-	uint64_t * boundaries = malloc(max_fingerprints * sizeof(uint64_t));
+	uint64_t * content_sizes = malloc(max_fingerprints * sizeof(uint64_t));
 
 	// INFO(NCCL_NET | NCCL_INIT, "Computing fingerprints\n\tSize: %llu\n", n);
 
-	do_fingerprinting((uint8_t *) data, n, &num_fingerprints, raw_fingerprint_buffer, boundaries,
+	do_fingerprinting((uint8_t *) data, n, &num_fingerprints, raw_fingerprint_buffer, content_sizes,
 		settings -> rabin_p, settings -> rabin_m_bits, settings -> rabin_table, settings -> window_bytes, settings -> lower_bits, settings -> min_chunk_size_bytes, settings -> max_chunk_size_bytes, settings -> magic_val);
 
 	INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\tBuffer Size: %llu\n\tNumber Fingerprints: %llu\n", n, num_fingerprints);
 
 	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
 
-	uint64_t prev_boundary = 0;
 	for (uint64_t i = 0; i < num_fingerprints; i++){
 		memcpy(packaged_fingerprints[i].fingerprint, &(raw_fingerprint_buffer[i * FINGERPRINT_NUM_BYTES]), FINGERPRINT_NUM_BYTES);
-		packaged_fingerprints[i].content_size = boundaries[i] - prev_boundary;
-		prev_boundary = boundaries[i];
+		packaged_fingerprints[i].content_size = content_sizes[i];
 	}
 
-	free(boundaries);
+	free(content_sizes);
 	free(raw_fingerprint_buffer);
 
 	*ret_packaged_fingerprints = packaged_fingerprints;

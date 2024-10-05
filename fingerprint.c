@@ -40,29 +40,8 @@ uint64_t init_rabin(uint8_t * data_bytes, uint64_t rabin_p, uint64_t rabin_mask,
 }
 
 
-int handle_magic_match(uint8_t * data_bytes, uint64_t start_ind, uint64_t end_ind, uint64_t prev_remain_bytes, uint64_t min_chunk_size_bytes, 
-						uint64_t num_fingerprints, uint8_t * fingerprints, uint64_t * boundaries, uint64_t rabin_p, uint64_t rabin_mask, uint64_t window_bytes, uint8_t * window) {
-	uint64_t chunk_size = (end_ind - start_ind) + 1;
-	uint64_t real_chunk_size = MY_MIN(chunk_size, prev_remain_bytes);
-	uint64_t new_remain_bytes = prev_remain_bytes - real_chunk_size;
-	if ((new_remain_bytes > min_chunk_size_bytes) || (new_remain_bytes == 0)) {
-		do_fingerprinting_sha256(data_bytes + start_ind, real_chunk_size, &fingerprints[num_fingerprints * FINGERPRINT_NUM_BYTES]);
-		boundaries[num_fingerprints] = MY_MIN(end_ind, start_ind + real_chunk_size);
-		// the last chunk perfectly fit
-		if (new_remain_bytes == 0){
-			return 1;
-		}
-		init_rabin(data_bytes + end_ind + min_chunk_size_bytes - window_bytes, rabin_p, rabin_mask, window_bytes, window);
-		return 0;
-	}
-	// less than min_chunk size remaining bytes at the end, so just make this one bigger
-	// this fingerprint will span the rest of the buffer and we will be done
-	else {
-		do_fingerprinting_sha256(data_bytes + start_ind, prev_remain_bytes, &fingerprints[num_fingerprints * FINGERPRINT_NUM_BYTES]);
-		boundaries[num_fingerprints] = start_ind + prev_remain_bytes;
-		return 1;
-	}
-
+void handle_sha(uint8_t * data, uint64_t start_ind, uint64_t size, uint8_t *ret_fingerprint) {
+	do_fingerprinting_sha256(data + start_ind, size, ret_fingerprint);
 }
 
 
@@ -73,77 +52,77 @@ int handle_magic_match(uint8_t * data_bytes, uint64_t start_ind, uint64_t end_in
 // uint64_t boundaries[max_fingerprints];
 
 /// ASSUMING num_bytes > min_chunk_size_bytes
-void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_fingerprints, uint8_t * fingerprints, uint64_t * boundaries,
+void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_fingerprints, uint8_t * fingerprints, uint64_t * content_sizes,
 	uint64_t rabin_p, uint64_t rabin_m_bits, uint64_t * rabin_table, uint64_t window_bytes, uint8_t lower_bits, uint64_t min_chunk_size_bytes, uint64_t max_chunk_size_bytes, uint64_t magic_val){
 
-	uint64_t cur_start_ind = 0;
-	uint64_t remain_bytes = num_bytes;
+	
 	uint8_t * data_bytes = (uint8_t *) data;
 	uint64_t rabin_mask = (1UL << rabin_m_bits) - 1;
 	uint64_t magic_mask = (1UL << lower_bits) - 1;
 	uint64_t magic_check;
 	uint64_t num_fingerprints = 0;
-	int is_done = 0;
 
-	uint8_t window[window_bytes];
-
-	uint64_t cur_rabin = init_rabin(data_bytes + min_chunk_size_bytes - window_bytes, rabin_p, rabin_mask, window_bytes, window);
-	cur_rabin = cur_rabin & rabin_mask;
-
-	// special case of immediate magic match
-	magic_check = cur_rabin & magic_mask;
-
-	// we will start at min chunk size bytes if there wasn't an initial match
-	// and num bytes is long enough
-	uint64_t i = min_chunk_size_bytes;
-	if ((num_bytes < min_chunk_size_bytes) || (magic_check == magic_val)){
-		is_done = handle_magic_match(data_bytes, 0, min_chunk_size_bytes, remain_bytes, min_chunk_size_bytes, num_fingerprints, fingerprints, boundaries, rabin_p, rabin_mask, window_bytes, window);
-		if (is_done){
-			*ret_num_fingerprints = 1;
-			return;
-		}
-		num_fingerprints += 1;
-		remain_bytes -= min_chunk_size_bytes;
-		cur_start_ind = min_chunk_size_bytes;
-		// ensure that we advance where we compute the 
-		// the next segment
-		// (init rabin table has been populaed with the bytes
-		// now at 2 * min_chunk_size bytes - window_bytes)
-		// would have returned if there wasn't enough for 2 min sin chunk sized chunks
-		i += (min_chunk_size_bytes - window_bytes);
+	if (num_bytes <= min_chunk_size_bytes){
+		handle_sha(data, 0, num_bytes, fingerprints);
+		*ret_num_fingerprints = 1;
+		*content_sizes = num_bytes;
+		return;
 	}
 
 
+
+	uint8_t window[window_bytes];
+	
+	
+
 	// continue up to the initial minimum chunk size
+	uint64_t cur_start_ind = 0;
+	uint64_t remain_bytes = num_bytes;
+	uint64_t cur_size = min_chunk_size_bytes;
+	
 	uint8_t window_slot = 0;
 	uint8_t cur_data_byte;
-	
 	uint64_t rabin_diff;
 
+	uint64_t cur_rabin = init_rabin(data_bytes + min_chunk_size_bytes - 1 - window_bytes, rabin_p, rabin_mask, window_bytes, window);
+	cur_rabin = cur_rabin & rabin_mask;
+
 	
-	while(!is_done){
-		cur_data_byte = data_bytes[i];
+	while(1){
+		// special case of immediate magic match
+		magic_check = cur_rabin & magic_mask;
+		if ((magic_check == magic_val) || (cur_size >= max_chunk_size_bytes) || (cur_size >= remain_bytes)){
+			
+			// check if we are done
+			if ((cur_size >= remain_bytes) || ((remain_bytes - cur_size) < min_chunk_size_bytes)){
+				cur_size = remain_bytes;
+				handle_sha(data, cur_start_ind, cur_size, &fingerprints[num_fingerprints]);
+				content_sizes[num_fingerprints] = cur_size;
+				num_fingerprints++;
+				remain_bytes = 0;
+				break;
+			}
+
+			// if we aren't done
+			handle_sha(data, cur_start_ind, cur_size, &fingerprints[num_fingerprints]);
+			content_sizes[num_fingerprints] = cur_size;
+			num_fingerprints++;
+			remain_bytes -= cur_size;
+
+			cur_start_ind += cur_size;
+			remain_bytes -= cur_size;
+
+			cur_rabin = init_rabin(data_bytes + cur_start_ind + min_chunk_size_bytes - 1 - window_bytes, rabin_p, rabin_mask, window_bytes, window);
+			cur_size = min_chunk_size_bytes;
+			continue;
+		}
+		
+		cur_data_byte = data_bytes[cur_start_ind + cur_size];
 		rabin_diff = cur_rabin - rabin_table[window[window_slot]];
 		cur_rabin = (rabin_diff * rabin_p + cur_data_byte) & rabin_mask;
 		window[window_slot] = cur_data_byte;
 		window_slot = (window_slot + 1) % window_bytes;
-
-		magic_check = cur_rabin & magic_mask;
-		// check if we are at cutoff
-		// either magic value match, last byte, or at maximum size boundary
-		if ((magic_check == magic_val) || (i > (num_bytes - min_chunk_size_bytes)) || ((i - cur_start_ind) >= max_chunk_size_bytes)){
-			is_done = handle_magic_match(data_bytes, cur_start_ind, i, remain_bytes, min_chunk_size_bytes, num_fingerprints, fingerprints, boundaries, rabin_p, rabin_mask, window_bytes, window);
-			num_fingerprints += 1;
-			remain_bytes -= ((i - cur_start_ind) + 1);
-			cur_start_ind = i + 1;
-			i += (min_chunk_size_bytes - window_bytes);
-			//printf("\n\tRemain Bytes: %lu\n\tCur Start Ind: %lu\n\ti: %lu\n\t Is Done? %d\n\n", remain_bytes, cur_start_ind, i, is_done);
-
-		}
-		else{
-			i++;
-		}
-		
+		cur_size++;		
 	}
 
 	// if last iteration made is_done non-zero we already incremented by 1
