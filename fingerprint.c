@@ -44,6 +44,7 @@ void handle_sha(uint8_t * data, uint64_t start_ind, uint64_t size, uint8_t * ret
 	do_fingerprinting_sha256(data + start_ind, size, ret_fingerprint);
 	printf("Computed fingerprint:");
 	print_sha256(ret_fingerprint);
+	printf("\n\n");
 }
 
 
