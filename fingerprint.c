@@ -42,9 +42,6 @@ uint64_t init_rabin(uint8_t * data_bytes, uint64_t rabin_p, uint64_t rabin_mask,
 
 void handle_sha(uint8_t * data, uint64_t start_ind, uint64_t size, uint8_t * ret_fingerprint) {
 	do_fingerprinting_sha256(data + start_ind, size, ret_fingerprint);
-	printf("Computed fingerprint:");
-	print_sha256(ret_fingerprint);
-	printf("\n\n");
 }
 
 
@@ -72,12 +69,8 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 		return;
 	}
 
-
-
 	uint8_t window[window_bytes];
 	
-	
-
 	// continue up to the initial minimum chunk size
 	uint64_t cur_start_ind = 0;
 	uint64_t remain_bytes = num_bytes;
