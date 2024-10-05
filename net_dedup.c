@@ -693,6 +693,11 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	for (uint64_t i = 0; i < num_fingerprints; i++){
 		fingerprint_offsets[i] = cur_offset;
 		cur_offset += packaged_fingerprints[i].content_size;
+		if (TO_PRINT_FINGERPRINT_INFO){
+			printf("Computed Fingerprint #%lu:Content Size: %lu\n\tHex: ", i, packaged_fingerprints[i].content_size);
+			print_sha256(packaged_fingerprints[i].fingerprint);
+			printf("\n");
+		}
 	}
 
 	send_state -> fingerprint_offsets = fingerprint_offsets;
@@ -1339,7 +1344,7 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 	Fingerprint_Entry entry;
 	for (uint64_t i = 0; i < num_fingerprints; i++){
 
-		if (TO_PRINT_INTERCEPT_INFO && TO_PRINT_FINGERPRINT_INFO){
+		if (TO_PRINT_FINGERPRINT_INFO){
 			printf("Fingerprint #%lu:Content Size: %lu\n\tHex: ", i, packaged_fingerprints[i].content_size);
 			print_sha256(packaged_fingerprints[i].fingerprint);
 			printf("\n");

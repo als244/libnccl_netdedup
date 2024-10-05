@@ -11,9 +11,7 @@
 #define TO_PRINT_FINGERPRINT_CACHE 0
 
 #define TO_PRINT_CAPTURE_STATS 0 
-#define TO_PRINT_FINGERPRINT_INFO 0
-#define TO_PRINT_INTERCEPT_INFO 0
-#define TO_PRINT_ALL 0
+#define TO_PRINT_FINGERPRINT_INFO 1
 
 
 // these are for managing reading the sender-side receiver buffers
