@@ -103,7 +103,7 @@ void do_fingerprinting(void * data, uint64_t num_bytes, uint64_t * ret_num_finge
 			}
 
 			// if we aren't done
-			handle_sha(data, cur_start_ind, cur_size, &fingerprints[num_fingerprints]);
+			handle_sha(data, cur_start_ind, cur_size, &fingerprints[num_fingerprints * FINGERPRINT_NUM_BYTES]);
 			content_sizes[num_fingerprints] = cur_size;
 			num_fingerprints++;
 
