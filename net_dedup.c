@@ -912,7 +912,7 @@ int process_send_fingerprint_header(Dedup_Send_Req * send_req){
 		pid_t pid = getpid();
 		pid_t tid = gettid();
 		uint64_t num_fingerprints = send_req -> fingerprint_header.num_fingerprints;
-		INFO(NCCL_NET | NCCL_INIT, "Sent Fingerprint Header:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tNum fingerprints: %lu\n\n", pid, tid, sockfd, num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "Sent Fingerprint Header:\n\t\tProcess Id: %d\n\t\tThread Id: %d\n\t\tSockfd: %d\n\t\tNum fingerprints: %lu\n\n", pid, tid, sockfd, num_fingerprints);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
