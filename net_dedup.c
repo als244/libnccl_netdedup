@@ -657,7 +657,7 @@ int process_send_header(Dedup_Send_Req * send_req){
 	if (TO_LOG_GENERAL_HEADERS){
 		char is_fingerprint = send_req -> header.is_fingerprint;
 		uint64_t num_bytes = send_req -> header.content_size;
-		INFO(NCCL_NET | NCCL_INIT, "Sent general header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
+		INFO(NCCL_NET | NCCL_INIT, "Sent General Header:\n\t\tIs fingerprint: %d\n\t\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -726,7 +726,9 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 	do_fingerprinting((uint8_t *) data, n, &num_fingerprints, raw_fingerprint_buffer, content_sizes,
 		settings -> rabin_p, settings -> rabin_m_bits, settings -> rabin_table, settings -> window_bytes, settings -> lower_bits, settings -> min_chunk_size_bytes, settings -> max_chunk_size_bytes, settings -> magic_val);
 
-	INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\tBuffer Size: %llu\n\t# Fingerprints: %llu\n", n, num_fingerprints);
+	if (TO_LOG_FINGERPRINT_COMPUTATION){
+		INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\t\tBuffer Size: %llu\n\t\t# Fingerprints: %llu\n\n", n, num_fingerprints);
+	}
 
 	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
 
@@ -894,7 +896,7 @@ int process_send_fingerprint_header(Dedup_Send_Req * send_req){
 	// otherwise we sent the entire header, so we can continue
 	if (TO_LOG_FINGERPRINT_HEADERS){
 		uint64_t num_fingerprints = send_req -> fingerprint_header.num_fingerprints;
-		INFO(NCCL_NET | NCCL_INIT, "Sent fingerprint header:\n\tNum fingerprints: %lu\n\n", num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "Sent Fingerprint Header:\n\t\tNum fingerprints: %lu\n\n", num_fingerprints);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -1295,7 +1297,7 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 
 
 	if (TO_LOG_GENERAL_HEADERS){
-		INFO(NCCL_NET | NCCL_INIT, "Received general header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
+		INFO(NCCL_NET | NCCL_INIT, "Received General Header:\n\t\tIs fingerprint: %d\n\t\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -1412,7 +1414,7 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 	(recv_req -> recv_fingerprint_state).cur_recv_content_offset = 0;
 
 	if (TO_LOG_FINGERPRINT_HEADERS){
-		INFO(NCCL_NET | NCCL_INIT, "Received fingerprint header:\n\tNum fingerprints: %lu\n\n", num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "Received Fingerprint Header:\n\t\tNum fingerprints: %lu\n\n", num_fingerprints);
 	}
 
 
