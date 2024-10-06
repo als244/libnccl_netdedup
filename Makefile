@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS_DEBUG = -g -fPIC -Wall -pedantic
-CFLAGS = -O3 -fPIC -march=native -Wall -pedantid
+CFLAGS = -O3 -fPIC -march=native -Wall -pedantic
 
 BUILD_CFLAGS = ${CFLAGS}
 LIB_BUILD_CFLAGS = -shared ${BUILD_CFLAGS}
