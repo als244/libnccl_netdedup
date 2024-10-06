@@ -661,7 +661,7 @@ int process_send_header(Dedup_Send_Req * send_req){
 		pid_t tid = gettid();
 		char is_fingerprint = send_req -> header.is_fingerprint;
 		uint64_t num_bytes = send_req -> header.content_size;
-		INFO(NCCL_NET | NCCL_INIT, "Sent General Header:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tIs fingerprint: %d\n\t\t\t\tContent Size: %lu\n\n", pid, tid, sockfd, (int) is_fingerprint, num_bytes);
+		INFO(NCCL_NET | NCCL_INIT, "Sent General Header:\n\t\t\t\t\t\tProcess Id: %d\n\t\t\t\t\t\tThread Id: %d\n\t\t\t\t\t\tSockfd: %d\n\t\t\t\t\t\tIs fingerprint: %d\n\t\t\t\t\t\tContent Size: %lu\n\n", pid, tid, sockfd, (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -733,7 +733,7 @@ uint64_t dedup_fingerprinting(int sockfd, void * data, size_t n, Fingerprint ** 
 	if (TO_LOG_FINGERPRINT_COMPUTATION){
 		pid_t pid = getpid();
 		pid_t tid = gettid();
-		INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tBuffer Size: %llu\n\t\t\t\t# Fingerprints: %llu\n\n", pid, tid, sockfd, n, num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints:\n\t\t\t\t\t\tProcess Id: %d\n\t\t\t\t\t\tThread Id: %d\n\t\t\t\t\t\tSockfd: %d\n\t\t\t\t\t\tBuffer Size: %llu\n\t\t\t\t\t\t# Fingerprints: %llu\n\n", pid, tid, sockfd, n, num_fingerprints);
 	}
 
 	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
@@ -912,7 +912,7 @@ int process_send_fingerprint_header(Dedup_Send_Req * send_req){
 		pid_t pid = getpid();
 		pid_t tid = gettid();
 		uint64_t num_fingerprints = send_req -> fingerprint_header.num_fingerprints;
-		INFO(NCCL_NET | NCCL_INIT, "Sent Fingerprint Header:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tNum fingerprints: %lu\n\n", pid, tid, sockfd, num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "Sent Fingerprint Header:\n\t\t\t\t\t\tProcess Id: %d\n\t\t\t\t\t\tThread Id: %d\n\t\t\t\t\t\tSockfd: %d\n\t\t\t\t\t\t# Fingerprints: %lu\n\n", pid, tid, sockfd, num_fingerprints);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -1317,7 +1317,7 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 	if (TO_LOG_GENERAL_HEADERS){
 		pid_t pid = getpid();
 		pid_t tid = gettid();
-		INFO(NCCL_NET | NCCL_INIT, "Received General Header:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tIs fingerprint: %d\n\t\t\t\tContent Size: %lu\n\n", pid, tid, sockfd, (int) is_fingerprint, num_bytes);
+		INFO(NCCL_NET | NCCL_INIT, "Received General Header:\n\t\t\t\t\t\tProcess Id: %d\n\t\t\t\t\t\tThread Id: %d\n\t\t\t\t\t\tSockfd: %d\n\t\t\t\t\t\tIs fingerprint: %d\n\t\t\t\t\t\tContent Size: %lu\n\n", pid, tid, sockfd, (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -1437,7 +1437,7 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 	if (TO_LOG_FINGERPRINT_HEADERS){
 		pid_t pid = getpid();
 		pid_t tid = gettid();
-		INFO(NCCL_NET | NCCL_INIT, "Received Fingerprint Header:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tNum fingerprints: %lu\n\n", pid, tid, sockfd, num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "Received Fingerprint Header:\n\t\t\t\t\t\tProcess Id: %d\n\t\t\t\t\t\tThread Id: %d\n\t\t\t\t\t\tSockfd: %d\n\t\t\t\t\t\t# Fingerprints: %lu\n\n", pid, tid, sockfd, num_fingerprints);
 	}
 
 
@@ -1555,7 +1555,8 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 	(recv_req -> recv_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints = num_missing_fingerprints;
 
 	if (TO_LOG_CAPTURE_STATS){
-		INFO(NCCL_NET | NCCL_INIT, "Capture stats:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tTotal Fingerprints: %llu\n\t\t\t\tMissing Fingerprints: %llu\n\n\t\t\t\tRedundant Ratio: %llu / %llu\n\t\t\t\t\tRedundant Percentage: %.2f%%\n\n\n", pid, tid, num_fingerprints, num_missing_fingerprints, redudant_bytes, total_bytes, redudant_ratio);
+		INFO(NCCL_NET | NCCL_INIT, "CAPTURE STATS:\n\t\t\t\t\t\tProcess Id: %d\n\t\t\t\t\t\tThread Id: %d\n\t\t\t\t\t\t# Total Fingerprints: %llu\n\t\t\t\t\t\t# Missing Fingerprints: %llu\n\t\t\t\t\t\tRedundant Byte-Ratio: %llu / %llu\n\t\t\t\t\t\t\tRedundant Percentage: %.2f%%\n\n\n", 
+										pid, tid, num_fingerprints, num_missing_fingerprints, redudant_bytes, total_bytes, redudant_ratio);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
