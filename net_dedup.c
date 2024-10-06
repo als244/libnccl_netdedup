@@ -70,6 +70,13 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 		to_skip_insert_cache = 1;
 	}
 
+	char * max_requests = getenv("NCCL_NET_MAX_REQUESTS");
+	if (!max_requests){
+		fprintf(stderr, "Error: NCCL_NET_MAX_REQUESTS must be set\n");
+		return ncclSystemError;
+	}
+
+	max_requests_per_comm = atoi(max_requests);
 
 	return ncclSuccess;
 }
@@ -327,9 +334,9 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 			return ncclSystemError;
 		}
 
-		Dedup_Send_Comm * dedup_send_comm = malloc(sizeof(Dedup_Send_Comm));
+		Dedup_Send_Comm * dedup_send_comm = mmap(NULL, sizeof(Dedup_Send_Comm), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 		if (!dedup_send_comm){
-			perror("malloc() for send_comm");
+			perror("mmap() for send_comm");
 			return ncclSystemError;
 		}
 
@@ -337,7 +344,32 @@ ncclResult_t netDedup_connect_v8(int dev, void * handle, void ** sendComm, ncclN
 		dedup_send_comm -> fd = connect_handle -> connectingFd;
 		memcpy(&(dedup_send_comm -> dest_addr), &(connect_handle -> addr), sizeof(struct sockaddr_in));
 
-		
+		dedup_send_comm -> requests = mmap(NULL, max_requests_per_comm * sizeof(Dedup_Req), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+		if (!dedup_send_comm -> requests){
+			perror("mmap() for send comm requests");
+			return ncclSystemError;
+		}
+
+		dedup_send_comm -> send_requests = mmap(NULL, max_requests_per_comm * sizeof(Dedup_Send_Req), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+		if (!dedup_send_comm -> requests){
+			perror("mmap() for send comm send requests");
+			return ncclSystemError;
+		}
+
+		for (int i = 0; i < max_requests_per_comm; i++){
+			(dedup_send_comm -> send_requests)[i].send_comm = dedup_send_comm;
+		}
+
+		for (int i = 0; i < max_requests_per_comm; i++){
+			(dedup_send_comm -> requests)[i].type = SEND_REQ;
+			(dedup_send_comm -> requests)[i].req = &(dedup_send_comm -> send_requests)[i];
+		}
+
+		pthread_mutex_init(&(dedup_send_comm -> req_lock), NULL);
+
+		dedup_send_comm -> take_req_ind = 0;
+
+			
 		// we are connected so set the send comm indicated the socket file descriptor to use
 		*sendComm = dedup_send_comm;
 
@@ -476,16 +508,41 @@ ncclResult_t netDedup_accept_v8(void * listenComm, void ** recvComm, ncclNetDevi
 
 		// we successfully received results and can now return!
 
-		Dedup_Recv_Comm * dedup_recv_comm = malloc(sizeof(Dedup_Recv_Comm));
+		Dedup_Recv_Comm * dedup_recv_comm = mmap(NULL, sizeof(Dedup_Recv_Comm), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 		if (!dedup_recv_comm){
-			perror("malloc() for dedup_recv_comm");
+			perror("mmap() for dedup_recv_comm");
 			return ncclSystemError;
 		} 
 
 		memcpy(&(dedup_recv_comm -> src_addr), &(dedup_listen_comm -> src_addr), sizeof(struct sockaddr_in));
 		dedup_recv_comm -> dev_num = dedup_listen_comm -> dev_num;
 		dedup_recv_comm -> fd = acceptedFd;
+
+		dedup_recv_comm -> requests = mmap(NULL, max_requests_per_comm * sizeof(Dedup_Req), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+		if (!(dedup_recv_comm -> requests)){
+			perror("mmap() for recv comm requests");
+			return ncclSystemError;
+		}
+
+		dedup_recv_comm -> recv_requests = mmap(NULL, max_requests_per_comm * sizeof(Dedup_Recv_Req), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+		if (!(dedup_recv_comm -> requests)){
+			perror("mmap() for recv comm recv requests");
+			return ncclSystemError;
+		}
+
+		pthread_mutex_init(&(dedup_recv_comm -> req_lock), NULL);
+
+		dedup_recv_comm -> take_req_ind = 0;
+
+		for (int i = 0; i < max_requests_per_comm; i++){
+			(dedup_recv_comm -> recv_requests)[i].recv_comm = dedup_recv_comm;
+		}
 		
+		for (int i = 0; i < max_requests_per_comm; i++){
+			(dedup_recv_comm -> requests)[i].type = RECV_REQ;
+			(dedup_recv_comm -> requests)[i].req = &(dedup_recv_comm -> recv_requests)[i];
+		}
+
 
 		*recvComm = dedup_recv_comm;
 
@@ -1203,20 +1260,32 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 		return ncclSuccess;
 	}
 
-	Dedup_Req * req = malloc(sizeof(Dedup_Req));
-	if (!req){
-		perror("malloc() for req for send");
-		return ncclSystemError;
+	// NCCL Core API guarantees no more than NCCL_NET_MAX_REQUESTS in parallel so we just need to
+	// ensure we are incrementing the request index we are taking every time and that the request
+	// queue has at least NCCL_NET_MAX_REQUEST_ENTRIES
+	//	- done at connect()/accept() time
+
+	// try to get a request
+	if (pthread_mutex_trylock(&(dedup_send_comm -> req_lock)) != 0){
+		*request = NULL;
+		return ncclSuccess;
 	}
 
-	req -> type = SEND_REQ;
+	// we acquired request lock so can take a free request and update counter
+	int take_req_ind = dedup_send_comm -> take_req_ind;
 
-	Dedup_Send_Req * send_req = mmap(NULL, sizeof(Dedup_Send_Req), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	if (!send_req){
-		perror("mmap() for send_req");
-		return ncclSystemError;
-	}
+	// update the counter
+	dedup_send_comm -> take_req_ind = (dedup_send_comm -> take_req_ind + 1) % max_requests_per_comm;
 
+	// now can release the lock
+	pthread_mutex_unlock(&(dedup_send_comm -> req_lock));
+
+
+	Dedup_Req * req = &((dedup_send_comm -> requests)[take_req_ind]);
+
+	Dedup_Send_Req * send_req = (Dedup_Send_Req *) req -> req;
+
+	// clear the previous request
 	memset(send_req, 0, sizeof(Dedup_Send_Req));
 
 	send_req -> sockfd = dedup_send_comm -> fd;
@@ -1843,21 +1912,30 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 		return ncclSuccess;
 	}
 
-	
+	// NCCL Core API guarantees no more than NCCL_NET_MAX_REQUESTS in parallel so we just need to
+	// ensure we are incrementing the request index we are taking every time and that the request
+	// queue has at least NCCL_NET_MAX_REQUEST_ENTRIES
+	//	- done at connect()/accept() time
 
-	Dedup_Req * req = malloc(sizeof(Dedup_Req));
-	if (!req){
-		perror("malloc() for req for send");
-		return ncclSystemError;
+	// try to get a request
+	if (pthread_mutex_trylock(&(dedup_recv_comm -> req_lock)) != 0){
+		*request = NULL;
+		return ncclSuccess;
 	}
 
-	req -> type = RECV_REQ;
+	// we acquired request lock so can take a free request and update counter
+	int take_req_ind = dedup_recv_comm -> take_req_ind;
 
-	Dedup_Recv_Req * recv_req = mmap(NULL, sizeof(Dedup_Recv_Req), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	if (!recv_req){
-		perror("mmap() for recv_req");
-		return ncclSystemError;
-	}
+	// update the counter
+	dedup_recv_comm -> take_req_ind = (dedup_recv_comm -> take_req_ind + 1) % max_requests_per_comm;
+
+	// now can release the lock
+	pthread_mutex_unlock(&(dedup_recv_comm -> req_lock));
+
+
+	Dedup_Req * req = &((dedup_recv_comm -> requests)[take_req_ind]);
+
+	Dedup_Recv_Req * recv_req = (Dedup_Recv_Req *) req -> req;
 
 	memset(recv_req, 0, sizeof(Dedup_Recv_Req));
 
@@ -1974,20 +2052,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 			}
 		}
 
-		// already freed the inner allocations (for fingerprint sends), but still need to free the container
-
-		if (type == SEND_REQ){
-			munmap(req -> req, sizeof(Dedup_Send_Req));
-		}
-		else{
-			munmap(req -> req, sizeof(Dedup_Recv_Req));
-		}
-
-		
-		free(req);
-
 		*done = 1;
-
 		active_fds[sockfd] = 0;
 	}
 
@@ -2027,7 +2092,10 @@ ncclResult_t netDedup_closeSend(void * sendComm) {
 	}
 
 	close(dedup_send_comm -> fd);
-	free(dedup_send_comm);
+
+	munmap(dedup_send_comm -> requests, max_requests_per_comm * sizeof(Dedup_Req));
+	munmap(dedup_send_comm -> send_requests, max_requests_per_comm * sizeof(Dedup_Send_Req));
+	munmap(dedup_send_comm, sizeof(Dedup_Send_Comm));
 
 	return ncclSuccess;
 }
@@ -2045,7 +2113,10 @@ ncclResult_t netDedup_closeRecv(void * recvComm) {
 	}
 
 	close(dedup_recv_comm -> fd);
-	free(dedup_recv_comm);
+	
+	munmap(dedup_recv_comm -> requests, max_requests_per_comm * sizeof(Dedup_Req));
+	munmap(dedup_recv_comm -> recv_requests, max_requests_per_comm * sizeof(Dedup_Recv_Req));
+	munmap(dedup_recv_comm, sizeof(Dedup_Recv_Comm));
 
 	return ncclSuccess;
 }

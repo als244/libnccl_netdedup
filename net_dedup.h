@@ -11,6 +11,11 @@
 #include "fingerprint_table.h"
 #include "fingerprint.h"
 
+
+typedef struct dedup_req Dedup_Req;
+typedef struct dedup_send_req Dedup_Send_Req;
+typedef struct dedup_recv_req Dedup_Recv_Req;
+
 typedef struct net_dedup_state {
 	int num_net_devices;
 	Net_Socket_Dev net_devices[MAX_NET_DEDUP_DEVS];
@@ -29,12 +34,20 @@ typedef struct dedup_send_comm {
 	int dev_num;
 	int fd;
 	struct sockaddr_in dest_addr;
+	Dedup_Req * requests;
+	Dedup_Send_Req * send_requests;
+	pthread_mutex_t req_lock;
+	int take_req_ind;
 } Dedup_Send_Comm;
 
 typedef struct dedup_recv_comm {
 	int dev_num;
 	int fd;
 	struct sockaddr_in src_addr;
+	Dedup_Req * requests;
+	Dedup_Recv_Req * recv_requests;
+	pthread_mutex_t req_lock;
+	int take_req_ind;
 } Dedup_Recv_Comm;
 
 
@@ -44,7 +57,6 @@ typedef struct dedup_connect_handle {
 	int in_progress;
 	int is_connected;
 } Dedup_Connect_Handle;
-
 
 
 typedef enum recv_req_stage {
@@ -124,7 +136,8 @@ typedef struct fingerprint_send_state {
 	uint64_t cur_reply_content_fingerprint_offset;
 } Fingerprint_Send_State;
 
-typedef struct dedup_recv_req {
+struct dedup_recv_req {
+	Dedup_Recv_Comm * recv_comm;
 	int sockfd;
 	RecvReqStage stage;
 	General_Header header;
@@ -138,10 +151,11 @@ typedef struct dedup_recv_req {
 	uint64_t app_offset;
 	// for debugging purposes dealing with partially filling content before reply
 	uint64_t app_filled_size;
-} Dedup_Recv_Req;
+};
 
 
-typedef struct dedup_send_req {
+struct dedup_send_req {
+	Dedup_Send_Comm * send_comm;
 	int sockfd;
 	SendReqStage stage;
 	General_Header header;
@@ -153,17 +167,20 @@ typedef struct dedup_send_req {
 	uint64_t size;
 	void * data;
 	uint64_t offset;
-} Dedup_Send_Req;
+};
 
 typedef enum req_type {
 	SEND_REQ,
 	RECV_REQ
 } ReqType;
 
-typedef struct dedup_req {
+struct dedup_req {
 	ReqType type;
 	void * req;
-} Dedup_Req;
+};
+
+
+
 
 
 extern Net_Dedup_State net_dedup_state;
@@ -171,6 +188,7 @@ extern Fingerprint_Cache * global_fingerprint_cache;
 extern ncclDebugLogger_t nccl_log_func;
 extern int active_fds[MAX_FDS];
 extern int to_skip_insert_cache;
+extern int max_requests_per_comm;
 
 
 // EXPORTED NCCL FUNCTIONS USED AS PLUGIN!
