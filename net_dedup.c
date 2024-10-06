@@ -1409,20 +1409,20 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 	(recv_req -> recv_fingerprint_state).packaged_fingerprints_size_bytes = num_fingerprints * sizeof(Fingerprint);
 
 	(recv_req -> recv_fingerprint_state).packaged_fingerprints = malloc((recv_req -> recv_fingerprint_state).packaged_fingerprints_size_bytes);
-	if (!(recv_req -> recv_fingerprint_state).packaged_fingerprints){
+	if (!((recv_req -> recv_fingerprint_state).packaged_fingerprints)){
 		perror("malloc() for recving packaged fingerprints");
 		return -1;
 	}
 
 	// assume we will be missing all fingerprints...
 	(recv_req -> recv_fingerprint_state).missing_fingerprint_inds = malloc(num_fingerprints * sizeof(uint64_t));
-	if (!(recv_req -> recv_fingerprint_state).missing_fingerprint_inds){
+	if (!((recv_req -> recv_fingerprint_state).missing_fingerprint_inds)){
 		perror("malloc() for missing fingerprint inds");
 		return -1;
 	}
 
 	(recv_req -> recv_fingerprint_state).missing_fingerprint_slots = malloc(num_fingerprints * sizeof(void *));
-	if (!(recv_req -> recv_fingerprint_state).missing_fingerprint_slots){
+	if (!((recv_req -> recv_fingerprint_state).missing_fingerprint_slots)){
 		perror("malloc() for missing fingerprint slots");
 		return -1;
 	}
