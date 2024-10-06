@@ -26,7 +26,7 @@
 // High-level important info
 #define TO_LOG_GENERAL_HEADERS 1
 #define TO_LOG_FINGERPRINT_HEADERS 1 
-    
+#define TO_LOG_FINGERPRINT_COMPUTATION 0
 #define TO_LOG_CAPTURE_STATS 1
 
 
