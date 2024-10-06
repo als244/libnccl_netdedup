@@ -733,7 +733,7 @@ uint64_t dedup_fingerprinting(int sockfd, void * data, size_t n, Fingerprint ** 
 	if (TO_LOG_FINGERPRINT_COMPUTATION){
 		pid_t pid = getpid();
 		pid_t tid = gettid();
-		INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints:\n\t\t\t\t\t\tProcess Id: %d\n\t\t\t\t\t\tThread Id: %d\n\t\t\t\t\t\tSockfd: %d\n\t\t\t\t\t\tBuffer Size: %llu\n\t\t\t\t\t\t# Fingerprints: %llu\n\n", pid, tid, sockfd, n, num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "COMPUTED FINGERPRINTS:\n\t\t\t\t\t\tProcess Id: %d\n\t\t\t\t\t\tThread Id: %d\n\t\t\t\t\t\tSockfd: %d\n\t\t\t\t\t\tBuffer Size: %llu\n\t\t\t\t\t\t# Fingerprints: %llu\n\n", pid, tid, sockfd, n, num_fingerprints);
 	}
 
 	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
@@ -799,7 +799,7 @@ int process_compute_fingerprints(Dedup_Send_Req * send_req){
 	send_state -> packaged_fingerprints_size_bytes = num_fingerprints * sizeof(Fingerprint);
 
 	// 3b.) receiving missing fingerprints
-	send_state -> missing_fingerprint_header.num_missing_fingerprints = 0;
+	(send_state -> missing_fingerprint_header).num_missing_fingerprints = 0;
 	send_state -> missing_fingerprint_inds = malloc(num_fingerprints * sizeof(uint64_t));
 	if (!(send_state -> missing_fingerprint_inds)){
 		perror("malloc() for preparing missing fingerprint inds buffer");
@@ -1007,13 +1007,13 @@ int process_recv_missing_fingerprints(Dedup_Send_Req * send_req){
 
 	int sockfd = send_req -> sockfd;
 
-	uint64_t num_missing_fingerprints = send_req -> send_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints;
+	uint64_t num_missing_fingerprints = (send_req -> send_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints;
 
 	uint64_t total_size = num_missing_fingerprints * sizeof(uint64_t);
 
-	uint64_t recv_missing_fingerprint_inds_offset = send_req -> send_fingerprint_state.recv_missing_fingerprint_inds_offset;
+	uint64_t recv_missing_fingerprint_inds_offset = (send_req -> send_fingerprint_state).recv_missing_fingerprint_inds_offset;
 
-	uint64_t * missing_fingerprint_inds = send_req -> send_fingerprint_state.missing_fingerprint_inds;
+	uint64_t * missing_fingerprint_inds = (send_req -> send_fingerprint_state).missing_fingerprint_inds;
 
 	void * cur_missing_fingerprints = ((void *) missing_fingerprint_inds) + recv_missing_fingerprint_inds_offset;
 	
@@ -1405,23 +1405,23 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 	// otherwise we recvd the entire header
 
 	// we need to allocate temporary structures to make life easier
-	uint64_t num_fingerprints = recv_req -> fingerprint_header.num_fingerprints;
-	recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes = num_fingerprints * sizeof(Fingerprint);
+	uint64_t num_fingerprints = (recv_req -> fingerprint_header).num_fingerprints;
+	(recv_req -> recv_fingerprint_state).packaged_fingerprints_size_bytes = num_fingerprints * sizeof(Fingerprint);
 
-	recv_req -> recv_fingerprint_state.packaged_fingerprints = malloc(recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes);
+	(recv_req -> recv_fingerprint_state).packaged_fingerprints = malloc((recv_req -> recv_fingerprint_state).packaged_fingerprints_size_bytes);
 	if (!recv_req -> recv_fingerprint_state.packaged_fingerprints){
 		perror("malloc() for recving packaged fingerprints");
 		return -1;
 	}
 
 	// assume we will be missing all fingerprints...
-	recv_req -> recv_fingerprint_state.missing_fingerprint_inds = malloc(num_fingerprints * sizeof(uint64_t));
+	(recv_req -> recv_fingerprint_state).missing_fingerprint_inds = malloc(num_fingerprints * sizeof(uint64_t));
 	if (!recv_req -> recv_fingerprint_state.missing_fingerprint_inds){
 		perror("malloc() for missing fingerprint inds");
 		return -1;
 	}
 
-	recv_req -> recv_fingerprint_state.missing_fingerprint_slots = malloc(num_fingerprints * sizeof(void *));
+	(recv_req -> recv_fingerprint_state).missing_fingerprint_slots = malloc(num_fingerprints * sizeof(void *));
 	if (!recv_req -> recv_fingerprint_state.missing_fingerprint_slots){
 		perror("malloc() for missing fingerprint slots");
 		return -1;
@@ -1457,11 +1457,11 @@ int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
 
 	int sockfd = recv_req -> sockfd;
 
-	int prev_recv = recv_req -> recv_fingerprint_state.recv_fingerprint_offset;
+	int prev_recv = (recv_req -> recv_fingerprint_state).recv_fingerprint_offset;
 
-	void * cur_packaged_fingerprints = ((void *) recv_req -> recv_fingerprint_state.packaged_fingerprints) + prev_recv;
+	void * cur_packaged_fingerprints = ((void *) (recv_req -> recv_fingerprint_state).packaged_fingerprints) + prev_recv;
 
-	uint64_t packaged_fingerprints_size_bytes = recv_req -> recv_fingerprint_state.packaged_fingerprints_size_bytes;
+	uint64_t packaged_fingerprints_size_bytes = (recv_req -> recv_fingerprint_state).packaged_fingerprints_size_bytes;
 
 	size_t remain_size = packaged_fingerprints_size_bytes - prev_recv;
 
@@ -1500,10 +1500,10 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
 	int ret;
 
-	uint64_t num_fingerprints = recv_req -> fingerprint_header.num_fingerprints;
-	Fingerprint * packaged_fingerprints = recv_req -> recv_fingerprint_state.packaged_fingerprints;
-	uint64_t * missing_fingerprint_inds = recv_req -> recv_fingerprint_state.missing_fingerprint_inds;
-	void ** missing_fingerprint_slots = recv_req -> recv_fingerprint_state.missing_fingerprint_slots;
+	uint64_t num_fingerprints = (recv_req -> fingerprint_header).num_fingerprints;
+	Fingerprint * packaged_fingerprints = (recv_req -> recv_fingerprint_state).packaged_fingerprints;
+	uint64_t * missing_fingerprint_inds = (recv_req -> recv_fingerprint_state).missing_fingerprint_inds;
+	void ** missing_fingerprint_slots = (recv_req -> recv_fingerprint_state).missing_fingerprint_slots;
 
 
 	void * cur_app_buffer = recv_req -> app_buffer;
@@ -1542,10 +1542,10 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
 	// maintain global statistics
 	// ideally we'd want these to be atomic, for now ok...
-	global_fingerprint_cache -> stats.total_recv_bytes += total_bytes;
-	global_fingerprint_cache -> stats.populated_from_cache_bytes += (total_bytes - total_missing_bytes);
-	global_fingerprint_cache -> stats.total_fingerprints += num_fingerprints;
-	global_fingerprint_cache -> stats.total_found_fingerprints += (num_fingerprints - num_missing_fingerprints);
+	(global_fingerprint_cache -> stats).total_recv_bytes += total_bytes;
+	(global_fingerprint_cache -> stats).populated_from_cache_bytes += (total_bytes - total_missing_bytes);
+	(global_fingerprint_cache -> stats).total_fingerprints += num_fingerprints;
+	(global_fingerprint_cache -> stats).total_found_fingerprints += (num_fingerprints - num_missing_fingerprints);
 
 	uint64_t redudant_bytes = total_bytes - total_missing_bytes;
 	double redudant_ratio = 100 * ((double) redudant_bytes / (double) total_bytes);
@@ -1576,7 +1576,7 @@ int process_send_missing_fingerprint_header(Dedup_Recv_Req * recv_req){
 
 	int sockfd = recv_req -> sockfd;
 
-	int prev_sent = recv_req -> recv_fingerprint_state.missing_fingerprint_header_offset;
+	int prev_sent = (recv_req -> recv_fingerprint_state).missing_fingerprint_header_offset;
 
 	void * cur_header = ((void *) &(recv_req -> recv_fingerprint_state.missing_fingerprint_header)) + prev_sent;
 
@@ -1614,13 +1614,13 @@ int process_send_missing_fingerprints(Dedup_Recv_Req * recv_req){
 
 	int sockfd = recv_req -> sockfd;
 
-	uint64_t num_missing_fingerprints = recv_req -> recv_fingerprint_state.missing_fingerprint_header.num_missing_fingerprints;
+	uint64_t num_missing_fingerprints = (recv_req -> recv_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints;
 
 	uint64_t total_size = num_missing_fingerprints * sizeof(uint64_t);
 
-	uint64_t prev_sent = recv_req -> recv_fingerprint_state.send_missing_fingerprint_inds_offset;
+	uint64_t prev_sent = (recv_req -> recv_fingerprint_state).send_missing_fingerprint_inds_offset;
 
-	uint64_t * missing_fingerprint_inds = recv_req -> recv_fingerprint_state.missing_fingerprint_inds;
+	uint64_t * missing_fingerprint_inds = (recv_req -> recv_fingerprint_state).missing_fingerprint_inds;
 	void * cur_missing_fingerprint_inds = ((void *) missing_fingerprint_inds) + prev_sent;
 
 	uint64_t remain_size = total_size - prev_sent;
@@ -1997,13 +1997,11 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 
 	if (is_complete == 1){
 
-		*done = 1;
-
 		if (TO_LOG_NCCL_API_TEST_COMPLETED){
 			INFO(NCCL_NET | NCCL_INIT, "Test() completed on sockfd #%d (type %d)!\n", sockfd, type);
 		}
 
-		if (size != NULL){
+		if (size){
 			// the recv will get freed during from irecvConsumed()
 			if (type == SEND_REQ){
 				*size = (int) (send_req -> header).content_size;
@@ -2018,22 +2016,24 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		if (type == SEND_REQ){
 
 
-			if (send_req -> header.is_fingerprint){
-				free(send_req -> send_fingerprint_state.packaged_fingerprints);
-				free(send_req -> send_fingerprint_state.fingerprint_offsets);
-				free(send_req -> send_fingerprint_state.missing_fingerprint_inds);
+			if ((send_req -> header).is_fingerprint){
+				free((send_req -> send_fingerprint_state).packaged_fingerprints);
+				free((send_req -> send_fingerprint_state).fingerprint_offsets);
+				free((send_req -> send_fingerprint_state).missing_fingerprint_inds);
 			}
 		}
 		else{
-			if (recv_req -> header.is_fingerprint){
-				free(recv_req -> recv_fingerprint_state.packaged_fingerprints);
-				free(recv_req -> recv_fingerprint_state.missing_fingerprint_slots);
-				free(recv_req -> recv_fingerprint_state.missing_fingerprint_inds);
+			if ((recv_req -> header).is_fingerprint){
+				free((recv_req -> recv_fingerprint_state).packaged_fingerprints);
+				free((recv_req -> recv_fingerprint_state).missing_fingerprint_slots);
+				free((recv_req -> recv_fingerprint_state).missing_fingerprint_inds);
 			}
 		}
 
 		free(req -> req);
 		free(req);
+
+		*done = 1;
 
 		active_fds[sockfd] = 0;
 	}
