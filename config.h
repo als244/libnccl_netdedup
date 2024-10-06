@@ -8,6 +8,8 @@
 #define MAX_COMMS_NET_DEDUP_SOCKET_DEV 65536
 #define SOCKET_LISTEN_BACKLOG 1024
 
+#define MAX_FINGERPRINTS_PER_REQ (1ULL << 12)
+
 
 // The following info gets loggin in NCCL_DEBUG_FILE
 #define TO_LOG_NCCL_API_INIT 1

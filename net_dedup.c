@@ -719,7 +719,7 @@ int process_send_reg_data(Dedup_Send_Req * send_req) {
 
 }
 
-uint64_t dedup_fingerprinting(int sockfd, void * data, size_t n, Fingerprint ** ret_packaged_fingerprints){
+uint64_t dedup_fingerprinting(int sockfd, void * data, size_t n, Fingerprint * packaged_fingerprints){
 
 	Fingerprinting_Settings * settings = &((global_fingerprint_cache) -> fingerprinting_settings);
 	uint64_t max_fingerprints = (n / (settings -> min_chunk_size_bytes)) + 1;
@@ -736,8 +736,6 @@ uint64_t dedup_fingerprinting(int sockfd, void * data, size_t n, Fingerprint ** 
 		INFO(NCCL_NET | NCCL_INIT, "COMPUTED FINGERPRINTS:\n\t\t\t\t\t\tProcess Id: %d\n\t\t\t\t\t\tThread Id: %d\n\t\t\t\t\t\tSockfd: %d\n\t\t\t\t\t\tBuffer Size: %llu\n\t\t\t\t\t\t# Fingerprints: %llu\n\n", pid, tid, sockfd, n, num_fingerprints);
 	}
 
-	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
-
 	for (uint64_t i = 0; i < num_fingerprints; i++){
 		memcpy(packaged_fingerprints[i].fingerprint, &(raw_fingerprint_buffer[i * FINGERPRINT_NUM_BYTES]), FINGERPRINT_NUM_BYTES);
 		packaged_fingerprints[i].content_size = content_sizes[i];
@@ -745,8 +743,6 @@ uint64_t dedup_fingerprinting(int sockfd, void * data, size_t n, Fingerprint ** 
 
 	free(content_sizes);
 	free(raw_fingerprint_buffer);
-
-	*ret_packaged_fingerprints = packaged_fingerprints;
 
 	return num_fingerprints;
 
@@ -769,15 +765,10 @@ int process_compute_fingerprints(Dedup_Send_Req * send_req){
 	Fingerprint_Send_State * send_state = &(send_req -> send_fingerprint_state);
 	Fingerprint_Header * fingerprint_header = &(send_req -> fingerprint_header);
 
-	uint64_t num_fingerprints = dedup_fingerprinting(sockfd, data, size, &(send_state -> packaged_fingerprints));
+	uint64_t num_fingerprints = dedup_fingerprinting(sockfd, data, size, send_state -> packaged_fingerprints);
 	fingerprint_header -> num_fingerprints = num_fingerprints;
 
-	uint64_t * fingerprint_offsets = malloc(num_fingerprints * sizeof(uint64_t));
-	if (!fingerprint_offsets){
-		perror("malloc() for fingerprint_offsets");
-		return -1;
-	}
-
+	uint64_t * fingerprint_offsets = send_state -> fingerprint_offsets;
 	Fingerprint * packaged_fingerprints = send_state -> packaged_fingerprints;
 	uint64_t cur_offset = 0;
 	for (uint64_t i = 0; i < num_fingerprints; i++){
@@ -790,8 +781,6 @@ int process_compute_fingerprints(Dedup_Send_Req * send_req){
 		}
 	}
 
-	send_state -> fingerprint_offsets = fingerprint_offsets;
-
 	// 3.) initialize the structures needed for this send request
 
 	// 3a.) sending fingprints
@@ -800,11 +789,6 @@ int process_compute_fingerprints(Dedup_Send_Req * send_req){
 
 	// 3b.) receiving missing fingerprints
 	(send_state -> missing_fingerprint_header).num_missing_fingerprints = 0;
-	send_state -> missing_fingerprint_inds = malloc(num_fingerprints * sizeof(uint64_t));
-	if (!(send_state -> missing_fingerprint_inds)){
-		perror("malloc() for preparing missing fingerprint inds buffer");
-		return -1;
-	}
 	send_state -> missing_fingerprint_header_offset = 0;
 	send_state -> recv_missing_fingerprint_inds_offset = 0;
 	
@@ -1227,9 +1211,9 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 
 	req -> type = SEND_REQ;
 
-	Dedup_Send_Req * send_req = malloc(sizeof(Dedup_Send_Req));
+	Dedup_Send_Req * send_req = mmap(NULL, sizeof(Dedup_Send_Req), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	if (!send_req){
-		perror("malloc() for send_req");
+		perror("mmap() for send_req");
 		return ncclSystemError;
 	}
 
@@ -1407,28 +1391,6 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 	// we need to allocate temporary structures to make life easier
 	uint64_t num_fingerprints = (recv_req -> fingerprint_header).num_fingerprints;
 	(recv_req -> recv_fingerprint_state).packaged_fingerprints_size_bytes = num_fingerprints * sizeof(Fingerprint);
-
-	(recv_req -> recv_fingerprint_state).packaged_fingerprints = malloc((recv_req -> recv_fingerprint_state).packaged_fingerprints_size_bytes);
-	if (!((recv_req -> recv_fingerprint_state).packaged_fingerprints)){
-		perror("malloc() for recving packaged fingerprints");
-		fprintf(stderr, "Supposed to recieve: %lu fingerprints...");
-		return -1;
-	}
-
-	// assume we will be missing all fingerprints...
-	(recv_req -> recv_fingerprint_state).missing_fingerprint_inds = malloc(num_fingerprints * sizeof(uint64_t));
-	if (!((recv_req -> recv_fingerprint_state).missing_fingerprint_inds)){
-		perror("malloc() for missing fingerprint inds");
-		return -1;
-	}
-
-	(recv_req -> recv_fingerprint_state).missing_fingerprint_slots = malloc(num_fingerprints * sizeof(void *));
-	if (!((recv_req -> recv_fingerprint_state).missing_fingerprint_slots)){
-		perror("malloc() for missing fingerprint slots");
-		return -1;
-	}
-
-
 	(recv_req -> recv_fingerprint_state).recv_fingerprint_offset = 0;
 	(recv_req -> recv_fingerprint_state).missing_fingerprint_header_offset = 0;
 	(recv_req -> recv_fingerprint_state).send_missing_fingerprint_inds_offset = 0;
@@ -1891,9 +1853,9 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 
 	req -> type = RECV_REQ;
 
-	Dedup_Recv_Req * recv_req = malloc(sizeof(Dedup_Recv_Req));
+	Dedup_Recv_Req * recv_req = mmap(NULL, sizeof(Dedup_Recv_Req), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	if (!recv_req){
-		perror("malloc() for recv_req");
+		perror("mmap() for recv_req");
 		return ncclSystemError;
 	}
 
@@ -2015,23 +1977,13 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 		// already freed the inner allocations (for fingerprint sends), but still need to free the container
 
 		if (type == SEND_REQ){
-
-
-			if ((send_req -> header).is_fingerprint){
-				free((send_req -> send_fingerprint_state).packaged_fingerprints);
-				free((send_req -> send_fingerprint_state).fingerprint_offsets);
-				free((send_req -> send_fingerprint_state).missing_fingerprint_inds);
-			}
+			munmap(req -> req, sizeof(Dedup_Send_Req));
 		}
 		else{
-			if ((recv_req -> header).is_fingerprint){
-				free((recv_req -> recv_fingerprint_state).packaged_fingerprints);
-				free((recv_req -> recv_fingerprint_state).missing_fingerprint_slots);
-				free((recv_req -> recv_fingerprint_state).missing_fingerprint_inds);
-			}
+			munmap(req -> req, sizeof(Dedup_Recv_Req));
 		}
 
-		free(req -> req);
+		
 		free(req);
 
 		*done = 1;

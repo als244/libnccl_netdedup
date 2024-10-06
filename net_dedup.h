@@ -88,13 +88,13 @@ typedef struct missing_fingerprint_header {
 } Missing_Fingerprint_Header;
 
 typedef struct fingerprint_recv_state {
-	Fingerprint * packaged_fingerprints;
+	Fingerprint packaged_fingerprints[MAX_FINGERPRINTS_PER_REQ];
 	uint64_t packaged_fingerprints_size_bytes;
 	uint64_t recv_fingerprint_offset;
 	// tracking which indices within fingerprint sequence were missing
-	uint64_t * missing_fingerprint_inds;
+	uint64_t missing_fingerprint_inds[MAX_FINGERPRINTS_PER_REQ];
 	// maintaining where the missing content should go within app buffer
-	void ** missing_fingerprint_slots;
+	void * missing_fingerprint_slots[MAX_FINGERPRINTS_PER_REQ];
 	// sending to other side
 	Missing_Fingerprint_Header missing_fingerprint_header;
 	// in case we could only send partial offset
@@ -109,15 +109,15 @@ typedef struct fingerprint_recv_state {
 } Fingerprint_Recv_State;
 
 typedef struct fingerprint_send_state {
-	Fingerprint * packaged_fingerprints;
-	uint64_t * fingerprint_offsets;
+	Fingerprint packaged_fingerprints[MAX_FINGERPRINTS_PER_REQ];
+	uint64_t fingerprint_offsets[MAX_FINGERPRINTS_PER_REQ];
 	uint64_t packaged_fingerprints_size_bytes;
 	uint64_t send_fingerprint_offset;
 	// receved from other side
 	Missing_Fingerprint_Header missing_fingerprint_header;
 	// in case we could only recv partial offset
 	int missing_fingerprint_header_offset;
-	uint64_t * missing_fingerprint_inds;
+	uint64_t missing_fingerprint_inds[MAX_FINGERPRINTS_PER_REQ];
 	// if we only paritally receive some of the missing fingerprint inds this iteration
 	uint64_t recv_missing_fingerprint_inds_offset;
 	uint64_t cur_reply_content_fingerprint_ind;
