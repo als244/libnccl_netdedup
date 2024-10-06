@@ -77,7 +77,7 @@ typedef enum send_req_stage {
 typedef struct dedup_header {
 	char is_fingerprint;
 	uint64_t content_size;
-} Dedup_Header;
+} General_Header;
 
 typedef struct fingerprint_header {
 	uint64_t num_fingerprints;
@@ -127,7 +127,7 @@ typedef struct fingerprint_send_state {
 typedef struct dedup_recv_req {
 	int sockfd;
 	RecvReqStage stage;
-	Dedup_Header header;
+	General_Header header;
 	int recv_header_offset;
 	Fingerprint_Header fingerprint_header;
 	// if we couldn't receive the whole fingerprint header
@@ -144,7 +144,7 @@ typedef struct dedup_recv_req {
 typedef struct dedup_send_req {
 	int sockfd;
 	SendReqStage stage;
-	Dedup_Header header;
+	General_Header header;
 	int send_header_offset;
 	Fingerprint_Header fingerprint_header;
 	// if we couldn't send the whole fingerprint header

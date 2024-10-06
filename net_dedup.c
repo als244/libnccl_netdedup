@@ -637,7 +637,7 @@ int process_send_header(Dedup_Send_Req * send_req){
 
 	int prev_sent = send_req -> send_header_offset;
 	void * cur_header = &(send_req -> header) + prev_sent;
-	size_t remain_size = sizeof(Dedup_Header) - prev_sent;
+	size_t remain_size = sizeof(General_Header) - prev_sent;
 
 	ssize_t sent_bytes = send(sockfd, cur_header, remain_size, 0);
 	if (sent_bytes == -1){
@@ -654,10 +654,10 @@ int process_send_header(Dedup_Send_Req * send_req){
 	}
 
 	// otherwise we read the whole header
-	if (TO_LOG_DEDUP_HEADERS){
+	if (TO_LOG_GENERAL_HEADERS){
 		char is_fingerprint = send_req -> header.is_fingerprint;
 		uint64_t num_bytes = send_req -> header.content_size;
-		INFO(NCCL_NET | NCCL_INIT, "Sent dedup header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
+		INFO(NCCL_NET | NCCL_INIT, "Sent general header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -1272,7 +1272,7 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 
 	int prev_recv = recv_req -> recv_header_offset;
 	void * cur_header = &(recv_req -> header) + prev_recv;
-	size_t remain_size = sizeof(Dedup_Header) - prev_recv;
+	size_t remain_size = sizeof(General_Header) - prev_recv;
 
 	ssize_t recv_bytes = recv(sockfd, cur_header, remain_size, 0);
 	if (recv_bytes == -1){
@@ -1294,8 +1294,8 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 	uint64_t num_bytes = recv_req -> header.content_size;
 
 
-	if (TO_LOG_DEDUP_HEADERS){
-		INFO(NCCL_NET | NCCL_INIT, "Received dedup header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
+	if (TO_LOG_GENERAL_HEADERS){
+		INFO(NCCL_NET | NCCL_INIT, "Received general header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){

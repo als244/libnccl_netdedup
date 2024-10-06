@@ -22,7 +22,7 @@
 #define TO_LOG_NCCL_API_CLOSE_CONN 0
 
 // High-level important info
-#define TO_LOG_DEDUP_HEADERS 1
+#define TO_LOG_GENERAL_HEADERS 0
 #define TO_LOG_FINGERPRINT_HEADERS 1
 #define TO_LOG_CAPTURE_STATS 1 
 	
