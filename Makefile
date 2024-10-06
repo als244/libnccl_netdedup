@@ -1,8 +1,8 @@
 CC = gcc
 CFLAGS_DEBUG = -g -fPIC -Wall -pedantic
-CFLAGS = -O3 -fPIC -march=native
+CFLAGS = -O3 -fPIC -march=native -Wall -pedantid
 
-BUILD_CFLAGS = ${CFLAGS_DEBUG}
+BUILD_CFLAGS = ${CFLAGS}
 LIB_BUILD_CFLAGS = -shared ${BUILD_CFLAGS}
 
 NCCL_PLUGIN = libnccl-net-dedup.so
