@@ -630,7 +630,7 @@ ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, 
 int process_send_header(Dedup_Send_Req * send_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: send_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: send_header()\n");
 	}
 
 	int sockfd = send_req -> sockfd;
@@ -657,11 +657,11 @@ int process_send_header(Dedup_Send_Req * send_req){
 	if (TO_LOG_DEDUP_HEADERS){
 		char is_fingerprint = send_req -> header.is_fingerprint;
 		uint64_t num_bytes = send_req -> header.content_size;
-		INFO(NCCL_NET, "Sent dedup header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
+		INFO(NCCL_NET | NCCL_INIT, "Sent dedup header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: send_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: send_header()\n");
 	}
 
 	return 1;
@@ -671,7 +671,7 @@ int process_send_header(Dedup_Send_Req * send_req){
 int process_send_reg_data(Dedup_Send_Req * send_req) {
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: send_reg_data()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: send_reg_data()\n");
 	}
 
 	int sockfd = send_req -> sockfd;
@@ -708,7 +708,7 @@ int process_send_reg_data(Dedup_Send_Req * send_req) {
 
 	// otherwise finished sending the whole thing
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: send_reg_data()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: send_reg_data()\n");
 	}
 	
 	return 1;
@@ -726,7 +726,7 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 	do_fingerprinting((uint8_t *) data, n, &num_fingerprints, raw_fingerprint_buffer, content_sizes,
 		settings -> rabin_p, settings -> rabin_m_bits, settings -> rabin_table, settings -> window_bytes, settings -> lower_bits, settings -> min_chunk_size_bytes, settings -> max_chunk_size_bytes, settings -> magic_val);
 
-	INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\tBuffer Size: %llu\n\tNumber Fingerprints: %llu\n", n, num_fingerprints);
+	INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\tBuffer Size: %llu\n\t# Fingerprints: %llu\n", n, num_fingerprints);
 
 	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
 
@@ -748,7 +748,7 @@ uint64_t dedup_fingerprinting(void * data, size_t n, Fingerprint ** ret_packaged
 int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * fingerprint_header, Fingerprint_Send_State * send_state){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: compute_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: compute_fingerprints()\n");
 	}
 
 	// 1.) compute all the fingerprints
@@ -797,7 +797,7 @@ int process_compute_fingerprints(void * data, size_t size, Fingerprint_Header * 
 	send_state -> cur_reply_content_fingerprint_offset = 0;
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: compute_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: compute_fingerprints()\n");
 	}
 
 	return 1;
@@ -818,7 +818,7 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: insert_outbound_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: insert_outbound_fingerprints()\n");
 	}
 
 	// 1.) try to obtain cache lock
@@ -834,8 +834,6 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 
 	Fingerprint * packaged_fingerprints = send_req -> send_fingerprint_state.packaged_fingerprints;
 
-	INFO(NCCL_NET | NCCL_INIT, "Inserting fingerprints into cache...\n");
-
 	int ret;
 
 	void * data = send_req -> data;
@@ -850,7 +848,7 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
 			to_skip_insert_cache = 1;
 			if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-				INFO(NCCL_NET, "Completed: insert_outbound_fingerprints()\n");
+				INFO(NCCL_NET | NCCL_INIT, "Completed: insert_outbound_fingerprints()\n");
 			}
 			return 1;
 		}
@@ -860,7 +858,7 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 	pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: insert_outbound_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: insert_outbound_fingerprints()\n");
 	}	
 
 	return 1;
@@ -869,7 +867,7 @@ int process_insert_outbound_fingerprints(Dedup_Send_Req * send_req){
 int process_send_fingerprint_header(Dedup_Send_Req * send_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: send_fingerprint_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: send_fingerprint_header()\n");
 	}
 
 	int sockfd = send_req -> sockfd;
@@ -896,11 +894,11 @@ int process_send_fingerprint_header(Dedup_Send_Req * send_req){
 	// otherwise we sent the entire header, so we can continue
 	if (TO_LOG_FINGERPRINT_HEADERS){
 		uint64_t num_fingerprints = send_req -> fingerprint_header.num_fingerprints;
-		INFO(NCCL_NET, "Sent fingerprint header:\n\tNum fingerprints: %lu\n\n", num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "Sent fingerprint header:\n\tNum fingerprints: %lu\n\n", num_fingerprints);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: send_fingerprint_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: send_fingerprint_header()\n");
 	}
 
 	return 1;
@@ -909,7 +907,7 @@ int process_send_fingerprint_header(Dedup_Send_Req * send_req){
 int process_send_packaged_fingerprints(Dedup_Send_Req * send_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: send_packaged_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: send_packaged_fingerprints()\n");
 	}
 
 	int sockfd = send_req -> sockfd;
@@ -939,7 +937,7 @@ int process_send_packaged_fingerprints(Dedup_Send_Req * send_req){
 	// otherwise we sent the whole thing so we can continue
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: send_packaged_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: send_packaged_fingerprints()\n");
 	}
 
 	return 1;
@@ -948,7 +946,7 @@ int process_send_packaged_fingerprints(Dedup_Send_Req * send_req){
 int process_recv_missing_fingerprint_header(Dedup_Send_Req * send_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: recv_missing_fingerprint_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_missing_fingerprint_header()\n");
 	}
 
 	int sockfd = send_req -> sockfd;
@@ -976,7 +974,7 @@ int process_recv_missing_fingerprint_header(Dedup_Send_Req * send_req){
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: recv_missing_fingerprint_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: recv_missing_fingerprint_header()\n");
 	}
 
 	return 1;
@@ -986,7 +984,7 @@ int process_recv_missing_fingerprint_header(Dedup_Send_Req * send_req){
 int process_recv_missing_fingerprints(Dedup_Send_Req * send_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: recv_missing_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_missing_fingerprints()\n");
 	}
 
 	int sockfd = send_req -> sockfd;
@@ -1021,7 +1019,7 @@ int process_recv_missing_fingerprints(Dedup_Send_Req * send_req){
 	// otherwise we have received all the missing fingerprint inds
 	
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: recv_missing_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: recv_missing_fingerprints()\n");
 	}
 
 	return 1;
@@ -1030,7 +1028,7 @@ int process_recv_missing_fingerprints(Dedup_Send_Req * send_req){
 int process_send_missing_content(Dedup_Send_Req * send_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: send_missing_content()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: send_missing_content()\n");
 	}
 
 	int sockfd = send_req -> sockfd;
@@ -1089,7 +1087,7 @@ int process_send_missing_content(Dedup_Send_Req * send_req){
 	// if we complete this loop then we are done
 	
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: send_missing_content()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: send_missing_content()\n");
 	}
 
 	return 1;
@@ -1195,7 +1193,7 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	int sockfd = dedup_send_comm -> fd;
 
 	if (TO_LOG_NCCL_API_SENDS){
-		INFO(NCCL_NET, "Calling isend():\n\tDev: %d\n\tFd: %d\n\tSize: %d", dev_num, sockfd, size);
+		INFO(NCCL_NET | NCCL_INIT, "Calling isend():\n\tDev: %d\n\tFd: %d\n\tSize: %d", dev_num, sockfd, size);
 	}
 
 	if (active_fds[sockfd]){
@@ -1267,7 +1265,7 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 int process_recv_header(Dedup_Recv_Req * recv_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: recv_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_header()\n");
 	}
 
 	int sockfd = recv_req -> sockfd;
@@ -1297,11 +1295,11 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 
 
 	if (TO_LOG_DEDUP_HEADERS){
-		INFO(NCCL_NET, "Received dedup header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
+		INFO(NCCL_NET | NCCL_INIT, "Received dedup header:\n\tIs fingerprint: %d\n\tContent Size: %lu\n\n", (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: recv_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: recv_header()\n");
 	}
 
 	return 1;
@@ -1311,7 +1309,7 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 int process_recv_reg_data(Dedup_Recv_Req * recv_req) {
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: recv_reg_data()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_reg_data()\n");
 	}
 
 	int sockfd = recv_req -> sockfd;
@@ -1347,7 +1345,7 @@ int process_recv_reg_data(Dedup_Recv_Req * recv_req) {
 	// otherwise we have finished
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: recv_reg_data()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: recv_reg_data()\n");
 	}
 
 	return 1;
@@ -1357,7 +1355,7 @@ int process_recv_reg_data(Dedup_Recv_Req * recv_req) {
 int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: recv_fingerprint_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_fingerprint_header()\n");
 	}
 
 	int sockfd = recv_req -> sockfd;
@@ -1414,12 +1412,12 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 	(recv_req -> recv_fingerprint_state).cur_recv_content_offset = 0;
 
 	if (TO_LOG_FINGERPRINT_HEADERS){
-		INFO(NCCL_NET, "Received fingerprint header:\n\tNum fingerprints: %lu\n\n", num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "Received fingerprint header:\n\tNum fingerprints: %lu\n\n", num_fingerprints);
 	}
 
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: recv_fingerprint_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: recv_fingerprint_header()\n");
 	}
 
 	return 1;
@@ -1429,7 +1427,7 @@ int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
 
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: recv_packaged_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_packaged_fingerprints()\n");
 	}
 
 	int sockfd = recv_req -> sockfd;
@@ -1459,7 +1457,7 @@ int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
 	// otherwise we sent the whole thing so we can continue
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: recv_packaged_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: recv_packaged_fingerprints()\n");
 	}
 
 	return 1;
@@ -1469,7 +1467,7 @@ int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
 int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: populate_from_net_cache()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: populate_from_net_cache()\n");
 	}
 
 	int ret;
@@ -1528,15 +1526,12 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 	// set the number of missing fingerprints for next stage to send out
 	(recv_req -> recv_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints = num_missing_fingerprints;
 
-
-	
-
 	if (TO_LOG_CAPTURE_STATS){
-		INFO(NCCL_NET, "Capture stats:\n\tTotal Fingerprints: %llu\n\tMissing Fingerprints: %llu\n\nRedundant Ratio: %llu / %llu\n\tRedundant Percentage: %.2f%%\n\n", num_fingerprints, num_missing_fingerprints, redudant_bytes, total_bytes, redudant_ratio);
+		INFO(NCCL_NET | NCCL_INIT, "Capture stats:\n\tTotal Fingerprints: %llu\n\tMissing Fingerprints: %llu\n\nRedundant Ratio: %llu / %llu\n\tRedundant Percentage: %.2f%%\n\n", num_fingerprints, num_missing_fingerprints, redudant_bytes, total_bytes, redudant_ratio);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: populate_from_net_cache()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: populate_from_net_cache()\n");
 	}
 
 	return 1;
@@ -1546,7 +1541,7 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 int process_send_missing_fingerprint_header(Dedup_Recv_Req * recv_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: send_missing_fingerprint_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: send_missing_fingerprint_header()\n");
 	}
 	
 
@@ -1574,7 +1569,7 @@ int process_send_missing_fingerprint_header(Dedup_Recv_Req * recv_req){
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: send_missing_fingerprint_header()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: send_missing_fingerprint_header()\n");
 	}
 
 	return 1;
@@ -1585,7 +1580,7 @@ int process_send_missing_fingerprint_header(Dedup_Recv_Req * recv_req){
 int process_send_missing_fingerprints(Dedup_Recv_Req * recv_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: recv_missing_content()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_missing_content()\n");
 	}
 
 	int sockfd = recv_req -> sockfd;
@@ -1618,7 +1613,7 @@ int process_send_missing_fingerprints(Dedup_Recv_Req * recv_req){
 	// otherwise we have finished sending
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: send_missing_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: send_missing_fingerprints()\n");
 	}
 
 	return 1;
@@ -1628,7 +1623,7 @@ int process_send_missing_fingerprints(Dedup_Recv_Req * recv_req){
 int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: recv_missing_content()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_missing_content()\n");
 	}
 
 	int sockfd = recv_req -> sockfd;
@@ -1693,7 +1688,7 @@ int process_recv_missing_content(Dedup_Recv_Req * recv_req){
 	// we will process the recv which frees extra space and then test will finalize
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: recv_missing_content()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: recv_missing_content()\n");
 	}
 
 	return 1;
@@ -1707,7 +1702,7 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
-		INFO(NCCL_NET, "Entered: insert_inbound_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Entered: insert_inbound_fingerprints()\n");
 	}
 
 	if (pthread_mutex_trylock(&(global_fingerprint_cache -> cache_lock)) != 0){
@@ -1730,7 +1725,7 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 			pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
 			to_skip_insert_cache = 1;
 			if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-				INFO(NCCL_NET, "Completed: insert_inbound_fingerprints()\n");
+				INFO(NCCL_NET | NCCL_INIT, "Completed: insert_inbound_fingerprints()\n");
 			}
 			return 1;
 		}
@@ -1739,7 +1734,7 @@ int processs_insert_inbound_fingerprints(Dedup_Recv_Req * recv_req){
 	pthread_mutex_unlock(&(global_fingerprint_cache -> cache_lock));
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
-		INFO(NCCL_NET, "Completed: insert_inbound_fingerprints()\n");
+		INFO(NCCL_NET | NCCL_INIT, "Completed: insert_inbound_fingerprints()\n");
 	}
 	
 	return 1;
@@ -1848,7 +1843,7 @@ ncclResult_t netDedup_irecv(void * recvComm, int n, void ** data, int * sizes, i
 	int sockfd = dedup_recv_comm -> fd;
 
 	if (TO_LOG_NCCL_API_RECVS){
-		INFO(NCCL_NET, "Calling irecv():\n\tDev: %d\n\tFd: %d\n\tSize: %d", dev_num, sockfd, sizes[0]);
+		INFO(NCCL_NET | NCCL_INIT, "Calling irecv():\n\tDev: %d\n\tFd: %d\n\tSize: %d", dev_num, sockfd, sizes[0]);
 	}
 
 	if (active_fds[sockfd]){
@@ -1937,7 +1932,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 	if (type == SEND_REQ){
 
 		if (TO_LOG_NCCL_API_ALL_TESTS){
-			INFO(NCCL_NET, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
+			INFO(NCCL_NET | NCCL_INIT, "Called test() for send() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
 		}
 
 		send_req = (Dedup_Send_Req *) (req -> req);
@@ -1955,7 +1950,7 @@ ncclResult_t netDedup_test(void * request, int * done, int * size) {
 	if (type == RECV_REQ){
 
 		if (TO_LOG_NCCL_API_ALL_TESTS){
-			INFO(NCCL_NET, "Called test() for recv() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
+			INFO(NCCL_NET | NCCL_INIT, "Called test() for recv() with fd: %d\n", ((Dedup_Send_Req *) (req -> req)) -> sockfd);
 		}
 
 		recv_req = (Dedup_Recv_Req *) (req -> req);
