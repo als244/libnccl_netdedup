@@ -629,6 +629,8 @@ ncclResult_t netDedup_iflush(void * recvComm, int n, void ** data, int * sizes, 
 
 int process_send_header(Dedup_Send_Req * send_req){
 
+	
+
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
 		INFO(NCCL_NET | NCCL_INIT, "Entered: send_header()\n");
 	}
@@ -655,9 +657,11 @@ int process_send_header(Dedup_Send_Req * send_req){
 
 	// otherwise we read the whole header
 	if (TO_LOG_GENERAL_HEADERS){
+		pid_t pid = getpid();
+		pid_t tid = gettid();
 		char is_fingerprint = send_req -> header.is_fingerprint;
 		uint64_t num_bytes = send_req -> header.content_size;
-		INFO(NCCL_NET | NCCL_INIT, "Sent General Header:\n\t\t\t\tSockfd: %d\n\t\t\t\tIs fingerprint: %d\n\t\t\t\tContent Size: %lu\n\n", sockfd, (int) is_fingerprint, num_bytes);
+		INFO(NCCL_NET | NCCL_INIT, "Sent General Header:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tIs fingerprint: %d\n\t\t\t\tContent Size: %lu\n\n", pid, tid, sockfd, (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -727,7 +731,9 @@ uint64_t dedup_fingerprinting(int sockfd, void * data, size_t n, Fingerprint ** 
 		settings -> rabin_p, settings -> rabin_m_bits, settings -> rabin_table, settings -> window_bytes, settings -> lower_bits, settings -> min_chunk_size_bytes, settings -> max_chunk_size_bytes, settings -> magic_val);
 
 	if (TO_LOG_FINGERPRINT_COMPUTATION){
-		INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\t\t\t\tSockfd: %d\n\t\t\t\tBuffer Size: %llu\n\t\t\t\t# Fingerprints: %llu\n\n", sockfd, n, num_fingerprints);
+		pid_t pid = getpid();
+		pid_t tid = gettid();
+		INFO(NCCL_NET | NCCL_INIT, "Computed fingerprints\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tBuffer Size: %llu\n\t\t\t\t# Fingerprints: %llu\n\n", pid, tid, sockfd, n, num_fingerprints);
 	}
 
 	Fingerprint * packaged_fingerprints = malloc(num_fingerprints * sizeof(Fingerprint));
@@ -903,8 +909,10 @@ int process_send_fingerprint_header(Dedup_Send_Req * send_req){
 
 	// otherwise we sent the entire header, so we can continue
 	if (TO_LOG_FINGERPRINT_HEADERS){
+		pid_t pid = getpid();
+		pid_t tid = gettid();
 		uint64_t num_fingerprints = send_req -> fingerprint_header.num_fingerprints;
-		INFO(NCCL_NET | NCCL_INIT, "Sent Fingerprint Header:\n\t\t\t\tSockfd: %d\n\t\t\t\tNum fingerprints: %lu\n\n", sockfd, num_fingerprints);
+		INFO(NCCL_NET | NCCL_INIT, "Sent Fingerprint Header:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tNum fingerprints: %lu\n\n", pid, tid, sockfd, num_fingerprints);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -1274,6 +1282,8 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 
 int process_recv_header(Dedup_Recv_Req * recv_req){
 
+	
+
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
 		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_header()\n");
 	}
@@ -1305,7 +1315,9 @@ int process_recv_header(Dedup_Recv_Req * recv_req){
 
 
 	if (TO_LOG_GENERAL_HEADERS){
-		INFO(NCCL_NET | NCCL_INIT, "Received General Header:\n\t\t\t\tSockfd: %d\n\t\t\t\tIs fingerprint: %d\n\t\t\t\tContent Size: %lu\n\n", sockfd, (int) is_fingerprint, num_bytes);
+		pid_t pid = getpid();
+		pid_t tid = gettid();
+		INFO(NCCL_NET | NCCL_INIT, "Received General Header:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tIs fingerprint: %d\n\t\t\t\tContent Size: %lu\n\n", pid, tid, sockfd, (int) is_fingerprint, num_bytes);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
@@ -1364,6 +1376,7 @@ int process_recv_reg_data(Dedup_Recv_Req * recv_req) {
 
 int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 
+	
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
 		INFO(NCCL_NET | NCCL_INIT, "Entered: recv_fingerprint_header()\n");
 	}
@@ -1422,7 +1435,9 @@ int process_recv_fingerprint_header(Dedup_Recv_Req * recv_req){
 	(recv_req -> recv_fingerprint_state).cur_recv_content_offset = 0;
 
 	if (TO_LOG_FINGERPRINT_HEADERS){
-		INFO(NCCL_NET | NCCL_INIT, "Received Fingerprint Header:\n\t\t\t\tSockfd: %d\n\t\t\t\tNum fingerprints: %lu\n\n", sockfd, num_fingerprints);
+		pid_t pid = getpid();
+		pid_t tid = gettid();
+		INFO(NCCL_NET | NCCL_INIT, "Received Fingerprint Header:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tSockfd: %d\n\t\t\t\tNum fingerprints: %lu\n\n", pid, tid, sockfd, num_fingerprints);
 	}
 
 
@@ -1475,6 +1490,9 @@ int process_recv_packaged_fingerprints(Dedup_Recv_Req * recv_req){
 
 
 int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
+
+	pid_t pid = getpid();
+	pid_t tid = gettid();
 
 	if (TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE){
 		INFO(NCCL_NET | NCCL_INIT, "Entered: populate_from_net_cache()\n");
@@ -1537,7 +1555,7 @@ int process_populate_from_net_cache(Dedup_Recv_Req * recv_req) {
 	(recv_req -> recv_fingerprint_state).missing_fingerprint_header.num_missing_fingerprints = num_missing_fingerprints;
 
 	if (TO_LOG_CAPTURE_STATS){
-		INFO(NCCL_NET | NCCL_INIT, "Capture stats:\n\tTotal Fingerprints: %llu\n\tMissing Fingerprints: %llu\n\nRedundant Ratio: %llu / %llu\n\tRedundant Percentage: %.2f%%\n\n", num_fingerprints, num_missing_fingerprints, redudant_bytes, total_bytes, redudant_ratio);
+		INFO(NCCL_NET | NCCL_INIT, "Capture stats:\n\t\t\t\tProcess Id: %d\n\t\t\t\tThread Id: %d\n\t\t\t\tTotal Fingerprints: %llu\n\t\t\t\tMissing Fingerprints: %llu\n\n\t\t\t\tRedundant Ratio: %llu / %llu\n\t\t\t\t\tRedundant Percentage: %.2f%%\n\n\n", pid, tid, num_fingerprints, num_missing_fingerprints, redudant_bytes, total_bytes, redudant_ratio);
 	}
 
 	if (TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE){
