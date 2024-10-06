@@ -8,10 +8,31 @@
 #define MAX_COMMS_NET_DEDUP_SOCKET_DEV 65536
 #define SOCKET_LISTEN_BACKLOG 1024
 
-#define TO_PRINT_FINGERPRINT_CACHE 0
 
-#define TO_PRINT_CAPTURE_STATS 0 
-#define TO_PRINT_FINGERPRINT_INFO 1
+// The following info gets loggin in NCCL_DEBUG_FILE
+#define TO_LOG_NCCL_API_INIT 1
+#define TO_LOG_NCCL_API_CONN_ESTABLISH 0
+#define TO_LOG_NCCL_API_RDMA_MR 0
+#define TO_LOG_NCCL_API_SENDS 0
+#define TO_LOG_NCCL_API_RECVS 0
+#define TO_LOG_NCCL_API_ALL_TESTS 0
+#define TO_LOG_NCCL_API_TEST_COMPLETED 0
+#define TO_LOG_NCCL_API_FLUSH 0
+#define TO_LOG_NCCL_API_RECV_CONSUMED 0
+#define TO_LOG_NCCL_API_CLOSE_CONN 0
+
+// High-level important info
+#define TO_LOG_DEDUP_HEADERS 1
+#define TO_LOG_FINGERPRINT_HEADERS 1
+#define TO_LOG_CAPTURE_STATS 1 
+	
+// logs all entries and exit to internal functions 
+#define TO_LOG_PROTOCOL_INTERNAL_ENTRY_VERBOSE 0
+#define TO_LOG_PROTOCOL_INTERNAL_COMPLETE_VERBOSE 0
+
+// this gets printed to stdout (for now)
+#define TO_PRINT_FINGERPRINT_INFO 0
+#define TO_PRINT_FINGERPRINT_CACHE 0
 
 
 // these are for managing reading the sender-side receiver buffers
