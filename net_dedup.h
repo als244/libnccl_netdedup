@@ -189,6 +189,9 @@ extern ncclDebugLogger_t nccl_log_func;
 extern int active_fds[MAX_FDS];
 extern int to_skip_insert_cache;
 extern int max_requests_per_comm;
+extern FILE * dump_bytes_file;
+extern FILE * dump_sizes_file;
+extern pthread_mutex_t dump_lock;
 
 
 // EXPORTED NCCL FUNCTIONS USED AS PLUGIN!

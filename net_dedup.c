@@ -76,6 +76,33 @@ ncclResult_t netDedup_init(ncclDebugLogger_t logFunction) {
 		return ncclSystemError;
 	}
 
+	char * dump_path = getenv("DUMP_PATH");
+	if (!dump_path){
+		fprintf(stderr, "Error: DUMP_PATH must be set\n");
+		return ncclSystemError;
+	}
+
+	char * dump_bytes_path;
+	asprintf(&dump_bytes_path, "%s.bytes", dump_path);
+	dump_bytes_file = fopen(dump_bytes_path, "wb");
+	if (!dump_bytes_file){
+		fprintf(stderr, "Error: could not open dump bytes file\n");
+		return ncclSystemError;
+	}
+	free(dump_bytes_path);
+
+	char * dump_sizes_path;
+	asprintf(&dump_sizes_path, "%s.sizes", dump_path);
+	dump_sizes_file = fopen(dump_sizes_path, "wb");
+	if (!dump_sizes_file){
+		fprintf(stderr, "Error: could not open dump sizes file\n");
+		return ncclSystemError;
+	}
+	free(dump_sizes_path);
+
+
+	pthread_mutex_init(&(dump_lock), NULL);
+
 	max_requests_per_comm = atoi(max_requests);
 
 	return ncclSuccess;
@@ -1243,6 +1270,29 @@ int process_send(Dedup_Send_Req * send_req){
 	return 0;
 }
 
+int dump_send(void * data, int size){
+
+	pthread_mutex_lock(&(dump_lock));
+
+	if (size > 0){
+		size_t bytes_written = fwrite(data, 1, size, dump_bytes_file);
+		if (bytes_written != size){
+			fprintf(stderr, "Error: only wrote %lu bytes to file when expected size: %d\n", bytes_written, size);
+			return -1;
+		}
+	}
+
+	size_t size_written = fwrite(&size, sizeof(int), 1, dump_sizes_file);
+	if (size_written != 1){
+		fprintf(stderr, "Error: did not write size to dump file\n");
+		return -1;
+	}
+
+	pthread_mutex_unlock(&(dump_lock));
+
+	return 0;
+}
+
 ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, void * mhandle, void ** request) {
 
 	int ret;
@@ -1305,6 +1355,13 @@ ncclResult_t netDedup_isend(void * sendComm, void * data, int size, int tag, voi
 	send_req -> header.content_size = size;
 
 	send_req -> stage = SEND_HEADER;
+
+
+	ret = dump_send(data, size);
+	if (ret){
+		fprintf(stderr, "Error: unable to dump data\n");
+		return ncclSystemError;
+	}
 
 	// process as much as we can
 	// send_req state will be updated for as far as we get

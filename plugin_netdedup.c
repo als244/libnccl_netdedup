@@ -21,6 +21,10 @@ int max_requests_per_comm;
 
 int to_skip_insert_cache;
 
+pthread_mutex_t dump_lock;
+FILE * dump_bytes_file;
+FILE * dump_sizes_file;
+
 // Setting the same functions to null as in reference NCCL-Socket implementation:
 //  Ref: https://github.com/NVIDIA/nccl/blob/master/src/transport/net_socket.cc
 
