@@ -39,7 +39,21 @@ int init_fingerprint_table(Fingerprint_Table * fingerprint_table) {
 
 	// and the bit position within each vector is the low order 6 bits
 	// initialize everything to empty
-	memset(fingerprint_table -> is_empty_bit_vector, 0xFF, ((FINGERPRINT_TABLE_SIZE >> 6) + 1) * sizeof(uint64_t));
+	int bit_vector_els = ((FINGERPRINT_TABLE_SIZE >> 6) + 1);
+
+	for (int i = 0; i < bit_vector_els - 1; i++){
+		(fingerprint_table -> is_empty_bit_vector)[i] = 0xFFFFFFFFFFFFFFFF;
+	}
+
+	int last_vec_els = FINGERPRINT_TABLE_SIZE & 0x3F;
+
+	if (last_vec_els == 0){
+		(fingerprint_table -> is_empty_bit_vector)[bit_vector_els - 1] = 0xFFFFFFFFFFFFFFFF;
+	}
+	else{
+		(fingerprint_table -> is_empty_bit_vector)[bit_vector_els - 1] = (1UL << last_vec_els) - 1;
+	}
+
 	return 0;
 }
 
@@ -50,7 +64,7 @@ int init_fingerprint_table(Fingerprint_Table * fingerprint_table) {
 // in the table
 
 // This is valuable during resizing
-uint64_t get_next_ind_fingerprint_table(uint64_t * is_empty_bit_vector, uint64_t table_size, uint64_t start_ind, bool to_flip_empty){
+uint64_t get_next_ind_fingerprint_table(uint64_t * is_empty_bit_vector, uint64_t table_size, uint64_t start_ind){
 
 	// need to pass in a valid starting index
 	if (unlikely(start_ind >= table_size)){
@@ -74,6 +88,8 @@ uint64_t get_next_ind_fingerprint_table(uint64_t * is_empty_bit_vector, uint64_t
 	// vector we will wrap around to these value
 	uint64_t search_vector = is_empty_bit_vector[start_vec_ind] & (0xFFFFFFFFFFFFFFFF << start_bit_ind);
 
+	// need to ensure search vector bits
+
 	// 64 because each element in bit-vector contains 64 possible hash buckets that could be full
 	// Will add the returned next closest bit position to this value to obtain the next empty slot
 	// With a good hash function and load factor hopefully this vector contains the value or at least
@@ -93,18 +109,6 @@ uint64_t get_next_ind_fingerprint_table(uint64_t * is_empty_bit_vector, uint64_t
 	// look at low order bits
 	while(cur_vec_ind <= start_vec_ind + bit_vector_size){
 
-		
-
-		// we are are seaching for next full index we just flip the bits
-		if(to_flip_empty){
-			search_vector = (search_vector ^ 0xFFFFFFFFFFFFFFFF);
-			// here we still want to ignore the indices lower than 
-			// bit position, so still clear out lower bits
-			if (cur_vec_ind == start_vec_ind){
-				search_vector = search_vector & (0xFFFFFFFFFFFFFFFF << start_bit_ind);
-			}
-		}
-
 		if (search_vector == 0){
 			cur_vec_ind++;
 			// if the cur_vec_ind would be wrapped around we don't
@@ -123,7 +127,6 @@ uint64_t get_next_ind_fingerprint_table(uint64_t * is_empty_bit_vector, uint64_t
 
 	// indicate that we couldn't find an empty slot (or full slot if to_flip_empty flag is true)
 	return table_size;
-
 }
 
 
@@ -153,7 +156,7 @@ int insert_fingerprint_table(Fingerprint_Table * fingerprint_table, uint8_t * fi
 	uint64_t hash_ind = fingerprint_hash_func_64(fingerprint_least_sig_64);
 
 	// we already saw cnt != size so we are guaranteed for this to succeed
-	uint64_t insert_ind = get_next_ind_fingerprint_table(fingerprint_table -> is_empty_bit_vector, fingerprint_table -> size, hash_ind, false);
+	uint64_t insert_ind = get_next_ind_fingerprint_table(fingerprint_table -> is_empty_bit_vector, fingerprint_table -> size, hash_ind);
 	
 	uint64_t key_size_bytes = FINGERPRINT_KEY_SIZE_BYTES;
 	uint64_t value_size_bytes = FINGERPRINT_VALUE_SIZE_BYTES;
@@ -222,7 +225,7 @@ uint64_t find_fingerprint_table(Fingerprint_Table * fingerprint_table, uint8_t *
 	// (at albeit potential performance hit if table is very full and we do wasted work)
 	uint64_t * is_empty_bit_vector = fingerprint_table -> is_empty_bit_vector;
 	
-	uint64_t next_empty = get_next_ind_fingerprint_table(is_empty_bit_vector, size, hash_ind, false);
+	uint64_t next_empty = get_next_ind_fingerprint_table(is_empty_bit_vector, size, hash_ind);
 	
 	uint64_t cur_ind = hash_ind;
 
@@ -258,12 +261,16 @@ uint64_t find_fingerprint_table(Fingerprint_Table * fingerprint_table, uint8_t *
 
 		// update the next key position which will be just 1 element higher so we can add the size of 1 item
 
-		// being explicity about type casting for readability...
-		cur_table_key = (void *) (((uint64_t) cur_table_key) + key_size_bytes + value_size_bytes);
+		
 
 		// next empty might have a returned a value that wrapped around
 		// if the whole table
 		cur_ind = (cur_ind + 1) % size;
+
+
+		// being explicity about type casting for readability...
+		cur_table_key = (void *) (((uint64_t) fingerprint_table -> items) + (cur_ind * (key_size_bytes + value_size_bytes)));
+
 		i += 1;
 	}
 	
@@ -306,7 +313,7 @@ int remvove_fingerprint_table(Fingerprint_Table * fingerprint_table, uint8_t * f
 	uint64_t key_size_bytes = FINGERPRINT_KEY_SIZE_BYTES;
 	uint64_t value_size_bytes = FINGERPRINT_VALUE_SIZE_BYTES;
 	uint64_t * is_empty_bit_vector = fingerprint_table -> is_empty_bit_vector;
-	uint64_t next_empty = get_next_ind_fingerprint_table(is_empty_bit_vector, size, empty_ind, false);
+	uint64_t next_empty = get_next_ind_fingerprint_table(is_empty_bit_vector, size, empty_ind);
 
 	uint64_t items_to_check;
 
