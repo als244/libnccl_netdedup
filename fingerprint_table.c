@@ -39,7 +39,7 @@ int init_fingerprint_table(Fingerprint_Table * fingerprint_table) {
 
 	// and the bit position within each vector is the low order 6 bits
 	// initialize everything to empty
-	int bit_vector_els = ((FINGERPRINT_TABLE_SIZE >> 6) + 1);
+	int bit_vector_els = MY_CEIL(FINGERPRINT_TABLE_SIZE, 64);
 
 	for (int i = 0; i < bit_vector_els - 1; i++){
 		(fingerprint_table -> is_empty_bit_vector)[i] = 0xFFFFFFFFFFFFFFFF;
@@ -77,7 +77,7 @@ uint64_t get_next_ind_fingerprint_table(uint64_t * is_empty_bit_vector, uint64_t
 	// The low order 6 bits of hash_ind refer to the bit position within each element of the
 	// the bit vector.  The high-order 56 bits refer the index within the actual vector
 
-	uint64_t bit_vector_size = (table_size >> 6) + 1;
+	uint64_t bit_vector_size = MY_CEIL(FINGERPRINT_TABLE_SIZE, 64);
 	// higher order bits the hash index
 	uint64_t start_vec_ind = start_ind >> 6;
 	// low order 6 bits
@@ -325,7 +325,7 @@ int remvove_fingerprint_table(Fingerprint_Table * fingerprint_table, uint8_t * f
 	// the next empty slot needs to be
 	// wrapped around
 	else{
-		items_to_check = (size - empty_ind) + next_empty;
+		items_to_check = (size - empty_ind - 1) + next_empty;
 	}
 
 	uint64_t i = 0;
